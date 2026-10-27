@@ -1,5 +1,6 @@
 // GET /api/analyze?concept=...&city=...
 import { analyze } from '../lib/analyze.mjs';
+import { publicMarket } from '../lib/public.mjs';
 import { createThrottle, clientIp } from '../lib/throttle.mjs';
 
 const limited = createThrottle({ max: 12 });
@@ -18,7 +19,7 @@ export default async function handler(req, res) {
     const { concept, city } = req.query || {};
     const result = await analyze({ concept, city });
     res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
-    res.end(JSON.stringify(result));
+    res.end(JSON.stringify(publicMarket(result)));
   } catch (err) {
     const status = err.status >= 400 && err.status < 500 ? err.status : 502;
     res.statusCode = status;

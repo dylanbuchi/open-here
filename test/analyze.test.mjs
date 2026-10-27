@@ -1,6 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rankTags, spreadZones, cityFocus } from '../lib/analyze.mjs';
+import { rankTags, spreadZones, cityFocus, pickLandmark } from '../lib/analyze.mjs';
+
+test('pickLandmark prefers a cafe over a zoo, a museum cafe or a discount grocer', () => {
+  const zone = { lat: 47.38, lon: 8.57 };
+  const at = (name, tags, d) => ({ name, tags, lat: 47.38 + d, lon: 8.57 });
+  const local = [
+    at('Zoo Zürich', ['urn:tag:category:place:zoo', 'urn:tag:category:place:restaurant'], 0),
+    at('Museum Café', ['urn:tag:category:place:museum', 'urn:tag:genre:place:cafe'], 0.0005),
+    at('Lidl', ['urn:tag:category:place:shopping'], 0.001),
+    // Descriptive tags like parking or nearby attractions must not disqualify.
+    at('Café Bärenbohl', ['urn:tag:genre:place:restaurant:coffee_shop', 'urn:tag:amenity:qloo:parking', 'urn:tag:nearby_attraction:qloo:zoo'], 0.004),
+  ];
+  assert.equal(pickLandmark(zone, local).name, 'Café Bärenbohl');
+  assert.equal(pickLandmark(zone, local.slice(0, 3)), null);
+});
 
 test('cityFocus centers on the competitor cluster and ignores far outliers', () => {
   const city = Array.from({ length: 9 }, (_, i) => ({ lat: 40.7 + i * 0.005, lon: -74 }));

@@ -5,7 +5,7 @@ import { costOf } from '../lib/llm.mjs';
 
 // Fake Qloo with just enough data for analyze() and the taste tools.
 function fakeQloo(calls = []) {
-  const place = (i) => ({ entity_id: `p${i}`, name: `Place ${i}`, properties: { address: `${i} Main St` }, location: { lat: 30 + i / 100, lon: -97 }, popularity: 0.9 });
+  const place = (i) => ({ entity_id: `p${i}`, name: `Place ${i}`, properties: { address: `${i} Main St` }, location: { lat: 30 + i / 100, lon: -97 }, popularity: 0.9, tags: [{ id: 'urn:tag:genre:place:restaurant:test' }] });
   return {
     searchTags: async () => [{ id: 'urn:tag:genre:place:restaurant:test', name: 'Test' }],
     insights: async (p) => {

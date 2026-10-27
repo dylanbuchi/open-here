@@ -104,6 +104,10 @@ Optional settings: `LLM_BASE_URL`, `LLM_MODEL` (default `deepseek-flash`) and `L
 
 API keys live only in server environment variables. Every endpoint is rate limited per IP. The agent has a request deadline under the hosting limit, stops when the visitor leaves, and reserves budget before each model call. City and concept for Qloo calls always come from the user, never from the model.
 
+## Attribution
+
+Taste data from the Qloo API. Open Here is an independent hackathon project, not affiliated with or endorsed by Qloo.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

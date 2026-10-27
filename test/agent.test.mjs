@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runAgent, playbookProblem } from '../lib/agent.mjs';
+import { runAgent, playbookProblem, audienceLabels } from '../lib/agent.mjs';
+
+test('audienceLabels mirror the chart: balanced gender under 0.05, top ages over 0.05', () => {
+  const l = audienceLabels({ age: { '24_and_younger': 0.06, '25_to_29': 0.01, '55_and_older': -0.13 }, gender: { female: 0.03, male: -0.03 } });
+  assert.deepEqual(l.highest_affinity_ages, ['Under 25']);
+  assert.deepEqual(l.lowest_affinity_ages, ['55 and older']);
+  assert.equal(l.gender, 'Balanced');
+  assert.equal(audienceLabels({ gender: { female: 0.16 } }).gender, 'Leans female');
+});
 import { costOf } from '../lib/llm.mjs';
 
 // Fake Qloo with just enough data for analyze() and the taste tools.

@@ -1,6 +1,34 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rankTags, spreadZones, cityFocus, pickLandmark } from '../lib/analyze.mjs';
+import { rankTags, spreadZones, cityFocus, pickLandmark, tidyPlace, neighborhoodOf } from '../lib/analyze.mjs';
+
+const ids = list => list.map(id => ({ id, name: id.split(':').pop() }));
+
+test('rankTags picks the place kind, not a dish tag that supermarkets carry', () => {
+  const tags = ids(['urn:tag:specialty_dish:place:bakery_vegan', 'urn:tag:offerings:place:vegan_options', 'urn:tag:genre:place:restaurant:bakery', 'urn:tag:category:place:bakery', 'urn:tag:category:place:vegan_restaurant', 'urn:tag:category:place:wedding_bakery']);
+  const ranked = rankTags(tags, 'Vegan bakery');
+  assert.equal(ranked[0].id, 'urn:tag:category:place:bakery');
+  assert.ok(ranked.every(t => !t.id.includes('specialty_dish') && !t.id.includes('offerings')));
+});
+
+test('rankTags never matches a boutique concept to hotels', () => {
+  const tags = ids(['urn:tag:genre:place:hotel:boutique', 'urn:tag:decor:qloo:boutique', 'urn:tag:category:place:boutique']);
+  assert.deepEqual(rankTags(tags, 'Sneaker boutique').map(t => t.id), ['urn:tag:category:place:boutique']);
+});
+
+test('rankTags keeps cuisine tags as a fallback (Taqueria, Ramen)', () => {
+  assert.equal(rankTags(ids(['urn:tag:cuisine:qloo:taqueria']), 'Taqueria')[0].id, 'urn:tag:cuisine:qloo:taqueria');
+});
+
+test('tidyPlace shortens long locality strings', () => {
+  assert.equal(tidyPlace('London, London Borough of Lambeth, Inner London - East, Surrey, Greater London, England, United Kingdom'), 'London, England, United Kingdom');
+  assert.equal(tidyPlace('Springfield, Greene County, Missouri, United States'), 'Springfield, Missouri, United States');
+  assert.equal(tidyPlace('Zurich, Switzerland'), 'Zurich, Switzerland');
+});
+
+test('neighborhoodOf picks the most common neighborhood', () => {
+  assert.equal(neighborhoodOf([{ neighborhood: 'South Lamar' }, { neighborhood: 'Zilker' }, { neighborhood: 'South Lamar' }, {}]), 'South Lamar');
+});
 
 test('pickLandmark prefers a cafe over a zoo, a museum cafe or a discount grocer', () => {
   const zone = { lat: 47.38, lon: 8.57 };

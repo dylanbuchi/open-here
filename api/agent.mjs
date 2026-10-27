@@ -26,9 +26,13 @@ export default async function handler(req, res) {
   }
 
   const { concept, city, brief } = req.query || {};
+  // Stop paid work as soon as the visitor leaves or starts another search.
+  const abort = new AbortController();
+  res.on('close', () => { if (!res.writableFinished) abort.abort(); });
   try {
-    await runAgent({ concept: String(concept || '').trim().slice(0, 80), city: String(city || '').trim().slice(0, 80), brief }, send);
+    await runAgent({ concept: String(concept || '').trim().slice(0, 80), city: String(city || '').trim().slice(0, 80), brief }, send, { signal: abort.signal });
   } catch (err) {
+    if (abort.signal.aborted) return res.end();
     const known = err instanceof LlmError || (err.status >= 400 && err.status < 500);
     if (!known) console.error(err);
     send({ type: 'error', message: known ? err.message : 'The agent hit a problem. Try again.' });

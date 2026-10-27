@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open Here: find where your business has hidden demand</title>
+<meta name="description" content="Open Here uses Qloo taste data to show where people already crave your concept but nobody serves them yet. Pick a concept and a city, get the top 5 spots.">
+<meta name="theme-color" content="#f4ecdc">
+<meta property="og:title" content="Open Here: find where your business has hidden demand">
+<meta property="og:description" content="Taste-lift maps for restaurants, cafes and shops, powered by Qloo.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23c8502d'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23f4ecdc'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#results">Skip to results</a>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <span class="pin" aria-hidden="true"></span>
+      <div>
+        <h1>Open Here</h1>
+        <p class="tag">Find where your business has hidden demand.</p>
+      </div>
+    </div>
+    <form id="search" class="search" novalidate>
+      <div class="field">
+        <label for="concept">Concept</label>
+        <input id="concept" name="concept" type="text" autocomplete="off" placeholder="Italian restaurant" aria-describedby="concept-err" value="Italian restaurant">
+        <span class="err" id="concept-err" role="alert"></span>
+      </div>
+      <div class="field">
+        <label for="city">City</label>
+        <input id="city" name="city" type="text" autocomplete="off" placeholder="Austin" aria-describedby="city-err" value="Austin">
+        <span class="err" id="city-err" role="alert"></span>
+      </div>
+      <button type="submit" id="go" class="btn">Find my spot</button>
+    </form>
+    <div class="chips" aria-label="Try an example">
+      <span class="chips-label">Try:</span>
+      <button type="button" class="chip" data-concept="Italian restaurant" data-city="Austin">Italian restaurant · Austin</button>
+      <button type="button" class="chip" data-concept="Coffee shop" data-city="Zurich">Coffee shop · Zurich</button>
+      <button type="button" class="chip" data-concept="Taqueria" data-city="Chicago">Taqueria · Chicago</button>
+      <button type="button" class="chip" data-concept="Ramen" data-city="Los Angeles">Ramen · Los Angeles</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="mapwrap">
+      <div id="map" role="application" aria-label="Map of recommended spots"></div>
+      <div class="legend" aria-hidden="true">
+        <span><i class="lg-heat"></i>Taste lift (hidden demand)</span>
+        <span><i class="lg-zone"></i>Top spots</span>
+        <span><i class="lg-comp"></i>Existing places</span>
+      </div>
+      <div id="maploading" class="maploading" hidden><div class="spinner"></div><p>Reading the city's taste…</p></div>
+    </div>
+
+    <aside class="panel" id="results" tabindex="-1" aria-label="Results">
+      <div id="live" class="sr" aria-live="polite"></div>
+      <div id="status" aria-live="polite"></div>
+      <div id="content" hidden>
+        <h2 id="headline" class="headline"></h2>
+        <p class="lift-line"><strong>Taste lift</strong> = where people's love for this concept runs higher than the area's general popularity predicts. Hidden demand, not just busy downtown.</p>
+
+        <section aria-labelledby="h-zones">
+          <h3 id="h-zones" class="sec">Top 5 places to open</h3>
+          <div id="empty" class="empty" hidden>No standout zones found for this search. Try a broader concept or a bigger city.</div>
+          <ol id="zones" class="zones"></ol>
+        </section>
+
+        <section aria-labelledby="h-aud">
+          <h3 id="h-aud" class="sec">Who your customers are</h3>
+          <div id="audience"></div>
+        </section>
+
+        <section aria-labelledby="h-love">
+          <h3 id="h-love" class="sec">What they love</h3>
+          <p class="hint">Cross-domain taste from Qloo. Use these for your playlist, decor and partnerships.</p>
+          <div id="love"></div>
+        </section>
+
+        <section id="playbook" aria-labelledby="h-play">
+          <h3 id="h-play" class="sec">Launch playbook</h3>
+          <div class="playbook-body"><p>AI playbook coming soon</p></div>
+        </section>
+
+        <section aria-labelledby="h-comp">
+          <h3 id="h-comp" class="sec">Competitors nearby</h3>
+          <details id="comp"><summary id="comp-sum"></summary><ul id="comp-list" class="comp-list"></ul></details>
+        </section>
+      </div>
+
+      <footer class="foot">
+        <p><strong>Powered by Qloo taste data.</strong></p>
+        <details>
+          <summary>How it works</summary>
+          <p>Qloo scores how strongly people in each part of the city are drawn to your concept (affinity) and how busy the area is overall (popularity). Taste lift is the gap: high affinity with low general buzz means demand that nobody is serving yet. We rank the strongest, well-spread zones and count the competitors already within 1 km.</p>
+        </details>
+      </footer>
+    </aside>
+  </main>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

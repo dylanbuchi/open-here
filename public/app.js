@@ -20,8 +20,10 @@
   let exSlug = null;
   const lp = (lift) => fmtSigned((+lift || 0) * 100, 0);
   const isPhone = () => matchMedia('(max-width:899px)').matches;
+  let wantJump = false;
   function toAgent() {
     if (!isPhone()) return;
+    wantJump = true;
     const el = $('agent');
     if (el && el.scrollIntoView) el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
   }
@@ -32,6 +34,19 @@
     let s = i > 0 ? address.slice(0, i) : address.split(',')[0];
     return s.trim();
   }
+
+  // Neighborhood first; fall back to the landmark when the neighborhood is unknown.
+  function placeName(z) {
+    const lm = (z && z.landmark) || {};
+    return z && z.neighborhood ? z.neighborhood : 'Near ' + (lm.name || 'this spot');
+  }
+  function placeSub(z, city) {
+    const lm = (z && z.landmark) || {};
+    const st = street(lm.address, city || '');
+    if (z && z.neighborhood) return [lm.name ? 'near ' + lm.name : '', st].filter(Boolean).join(' \u00b7 ');
+    return st;
+  }
+  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(Boolean).map((w) => w.replace(/s$/, '')).join(' ');
 
   function setBusy(b) {
     $('maploading').hidden = !b;
@@ -72,6 +87,9 @@
     $('results').classList.remove('wide');
     $('example-note').hidden = true;
     $('content').hidden = true;
+    $('empty').hidden = true;
+    $('lowsignal').hidden = true;
+    $('zonestat').hidden = true;
     $('status').innerHTML = '';
     $('agent-steps').innerHTML = '';
     $('agent').hidden = false;
@@ -148,6 +166,7 @@
     if (ctl) ctl.abort();
     ctl = new AbortController();
     const my = ++seq;
+    wantJump = false;
     setBusy(true);
     resetResults();
     $('live').textContent = 'The agent is analyzing ' + concept + ' in ' + city + '…';
@@ -157,6 +176,11 @@
   async function settle(st, my, concept, city, signal, t0, elapsedMs) {
     if (my !== seq) return;
     finishTrace(t0, elapsedMs);
+    // Phones: the playbook sits below the map, so bring it into view once the layout has settled.
+    if (st.gotPlaybook && wantJump && isPhone()) {
+      wantJump = false;
+      setTimeout(() => $('playbook').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }), 60);
+    }
     if (st.errored && !st.market && Array.isArray(st.errored.suggestions)) {
       // No data for this concept: offer concepts that do have data here.
       showSuggestions(st.errored.message, st.errored.suggestions, city);
@@ -303,7 +327,12 @@
     const bz = p.bestZone;
     const list = (a) => (a || []).map((x) => '<li>' + esc(x) + '</li>').join('');
     let html = '<h2 class="pb-head">' + esc(p.headline) + '</h2>';
-    if (bz) html += '<button type="button" class="best" id="best-btn" aria-label="Fly the map to the best spot, number ' + esc(bz.rank) + ' near ' + esc(bz.near) + '"><span class="num" aria-hidden="true">' + esc(bz.rank) + '</span><span><small>Best spot</small><b>#' + esc(bz.rank) + ' near ' + esc(bz.near) + '</b></span><span class="go" aria-hidden="true">Show on map &rarr;</span></button>';
+    if (bz) {
+      const nb = bz.neighborhood, nr = bz.near || '';
+      const title = nb ? nb : 'near ' + nr;
+      const sub = nb && nr ? '<span class="best-sub">near ' + esc(nr) + '</span>' : '';
+      html += '<button type="button" class="best" id="best-btn" aria-label="Fly the map to the best spot, number ' + esc(bz.rank) + ', ' + esc(nb ? nb + (nr ? ', near ' + nr : '') : 'near ' + nr) + '"><span class="num" aria-hidden="true">' + esc(bz.rank) + '</span><span><small>Best spot</small><b>#' + esc(bz.rank) + ' ' + esc(title) + '</b>' + sub + '</span><span class="go" aria-hidden="true">Show on map &rarr;</span></button>';
+    }
     if (p.whyHere && p.whyHere.length) html += '<h4 class="pb-sub">Why here</h4><ul class="why">' + list(p.whyHere) + '</ul>';
     html += '<div class="pb-grid"><div><h4 class="pb-sub">Target customer</h4><p>' + esc(p.targetCustomer) + '</p></div><div><h4 class="pb-sub">Vibe</h4><p>' + esc(p.vibe) + '</p></div></div>';
     if (p.offerIdeas && p.offerIdeas.length) html += '<h4 class="pb-sub">Offer ideas</h4><ul class="why">' + list(p.offerIdeas) + '</ul>';
@@ -412,7 +441,7 @@
         sect('Target customer', b.targetCustomer ? '<p>' + esc(b.targetCustomer) + '</p>' : '') +
       '</div>' +
       '<div class="cmp-col qloo"><h4 class="cmp-title">Open Here · Qloo-grounded</h4>' +
-        sect('Neighborhood', bz ? '<p>#' + esc(bz.rank) + ' near ' + esc(bz.near) + '</p>' : '') +
+        sect('Neighborhood', bz ? (bz.neighborhood ? '<p>' + esc(bz.neighborhood) + (bz.near ? '<br><small class="cmp-near">near ' + esc(bz.near) + '</small>' : '') + '</p>' : '<p>#' + esc(bz.rank) + ' near ' + esc(bz.near) + '</p>') : '') +
         sect('Playlist', chips(chipList(pl))) +
         sect('Partners', chips(chipList(pp))) +
         sect('Why here', (p.whyHere && p.whyHere.length) ? '<ul class="why">' + p.whyHere.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') +
@@ -485,13 +514,13 @@
     });
     (d.zones || []).forEach((z) => {
       const icon = L.divIcon({ className: 'zone-icon', html: '<div class="zpin">' + z.rank + '</div>', iconSize: [38, 38], iconAnchor: [19, 19] });
-      const m = L.marker([z.lat, z.lon], { icon, zIndexOffset: 1000, title: 'Zone ' + z.rank + ': near ' + (z.landmark ? z.landmark.name : '') })
-        .bindPopup('<b>#' + z.rank + ' Near ' + esc(z.landmark ? z.landmark.name : 'this spot') + '</b><br>' + esc(z.landmark ? z.landmark.address : '') + '<br><span title="Taste lift: how much more this crowd is drawn here than the area\'s general popularity predicts (in points).">Taste lift ' + lp(z.lift) + ' pts</span>').addTo(layers);
+      const m = L.marker([z.lat, z.lon], { icon, zIndexOffset: 1000, title: 'Zone ' + z.rank + ': ' + placeName(z) })
+        .bindPopup('<b>#' + z.rank + ' ' + esc(placeName(z)) + '</b><br>' + (z.neighborhood && z.landmark && z.landmark.name ? esc('near ' + z.landmark.name) + '<br>' : '') + esc(z.landmark ? z.landmark.address : '') + '<br><span title="Taste lift: how much more this crowd is drawn here than the area\'s general popularity predicts (in points).">Taste lift ' + lp(z.lift) + ' pts</span>').addTo(layers);
       m.on('click', () => highlight(z.rank));
       zoneMarkers[z.rank] = m;
       pts.push([z.lat, z.lon]);
     });
-    if (pts.length) map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 14 });
+    if (pts.length) map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [60, 60], paddingBottomRight: [40, 40], maxZoom: 14 });
     setTimeout(() => map.invalidateSize(), 50);
   }
 
@@ -541,22 +570,36 @@
     $('content').hidden = false;
     $('headline').textContent = 'Top spots for ' + d.concept + ' in ' + d.city;
     const pl = $('place');
-    if (d.place) pl.innerHTML = 'Qloo matched: <b>' + esc(d.place) + '</b> <span class="place-hint">Wrong place? Add the state or country, e.g. \'Springfield, Illinois\'.</span>';
-    pl.hidden = !d.place;
+    const tagName = d.tag && d.tag.name;
+    const showTag = !!tagName && norm(tagName) !== norm(d.concept);
+    let ph = '';
+    if (d.place) ph += 'Qloo matched: <b>' + esc(d.place) + '</b> <span class="place-hint">Wrong place? Add the state or country, e.g. \'Springfield, Illinois\'.</span>';
+    if (showTag) ph += '<span class="place-hint">Matched as: <b>' + esc(tagName) + '</b>. Qloo has no exact category for \'' + esc(d.concept) + '\', so we used the closest one.</span>';
+    pl.innerHTML = ph;
+    pl.hidden = !ph;
     drawMap(d);
     const zones = d.zones || [];
     $('empty').hidden = zones.length > 0;
     $('lowsignal').hidden = !(d.lowSignal && zones.length);
+    $('empty').hidden = zones.length > 0;
     const maxLift = Math.max(0.0001, ...zones.map((z) => z.lift));
     const topN = (d.competitors || []).length;
     const compTip = ' title="Based on Qloo\'s ' + topN + ' most popular matching places. Smaller spots may not be counted."';
+    const counts = zones.map((z) => z.competitorsWithin1km);
+    const uniform = zones.length > 0 && counts.every((n) => typeof n === 'number' && n === counts[0]);
+    const zs = $('zonestat');
+    if (uniform && topN) {
+      const n0 = counts[0];
+      zs.textContent = n0 === 0 ? 'None of the top ' + topN + ' popular matching places sit within 1 km of these spots.' : 'Each of these spots has ' + n0 + ' of the top ' + topN + ' popular matching places within 1 km.';
+    }
+    zs.hidden = !(uniform && topN);
     $('zones').innerHTML = zones.map((z) => {
       const n = z.competitorsWithin1km;
-      const badge = typeof n !== 'number' ? '' : n === 0 ? '<span class="badge"' + compTip + '>None of the top ' + topN + ' within 1 km</span>' : '<span class="badge busy"' + compTip + '>' + n + ' of the top ' + topN + ' within 1 km</span>';
-      const lm = z.landmark || {};
-      return '<li><button type="button" class="zone" data-rank="' + z.rank + '" aria-label="Zone ' + z.rank + ', near ' + esc(lm.name || 'this spot') + '. Fly to zone on map">' +
-        '<span class="num" aria-hidden="true">' + z.rank + '</span><span><div class="zname">Near ' + esc(lm.name || 'this spot') + '</div>' +
-        '<div class="zsub">' + esc(street(lm.address, d.city)) + '</div>' + badge +
+      const badge = uniform && topN ? '' : typeof n !== 'number' ? '' : n === 0 ? '<span class="badge"' + compTip + '>None of the top ' + topN + ' within 1 km</span>' : '<span class="badge busy"' + compTip + '>' + n + ' of the top ' + topN + ' within 1 km</span>';
+      const sub = placeSub(z, d.city);
+      return '<li><button type="button" class="zone" data-rank="' + z.rank + '" aria-label="Zone ' + z.rank + ', ' + esc(placeName(z)) + (sub ? ', ' + esc(sub) : '') + '. Fly to zone on map">' +
+        '<span class="num" aria-hidden="true">' + z.rank + '</span><span><div class="zname">' + esc(placeName(z)) + '</div>' +
+        '<div class="zsub">' + esc(sub) + '</div>' + badge +
         '<div class="liftrow" title="Taste lift: how much more this crowd is drawn here than the area\'s general popularity predicts (in points)."><span>Taste lift</span><span class="bar"><i style="width:' + Math.round((z.lift / maxLift) * 100) + '%"></i></span><span>' + lp(z.lift) + ' pts</span></div></span></button></li>';
     }).join('');
     document.querySelectorAll('.zone').forEach((el) => el.addEventListener('click', () => {

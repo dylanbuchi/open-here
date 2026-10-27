@@ -16,6 +16,14 @@ test('persistent 429 becomes a friendly busy error', async () => {
   await assert.rejects(qloo.searchTags('always-busy'), err => err.status === 503 && /busy/.test(err.message));
 });
 
+test('paces request starts to stay under 8 per second', async () => {
+  const starts = [];
+  const qloo = createQloo({ baseUrl: 'http://q', apiKey: 'k', fetchImpl: async () => { starts.push(Date.now()); return json(200, { results: {} }); } });
+  await Promise.all(Array.from({ length: 9 }, (_, i) => qloo.insights({ n: `pace-${i}` })));
+  const span = starts[starts.length - 1] - starts[0];
+  assert.ok(span >= 8 * 120, `9 starts took only ${span} ms`);
+});
+
 test('never runs more than 4 requests at once', async () => {
   let live = 0, peak = 0;
   const qloo = createQloo({ baseUrl: 'http://q', apiKey: 'k', fetchImpl: async () => { peak = Math.max(peak, ++live); await new Promise(r => setTimeout(r, 5)); live--; return json(200, { results: {} }); } });

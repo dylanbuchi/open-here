@@ -6,3 +6,6 @@ dist/
 .DS_Store
 *.log
 .vercel
+# Recorded Qloo results: served by the live demo, but Qloo asks that cached
+# data stay out of public repos. Record with scripts/record-example.mjs.
+public/examples/

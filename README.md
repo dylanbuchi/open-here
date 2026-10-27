@@ -83,6 +83,8 @@ npm test
 npm run dev             # http://127.0.0.1:3000
 ```
 
+The four example chips on the live site replay recorded agent runs. Those recordings are cached Qloo results, which Qloo asks participants to keep out of public repos, so they aren't committed. To create your own: `node --env-file=.env scripts/record-example.mjs austin-italian "Italian restaurant" Austin "cozy date-night spot for young couples"`, then `node --env-file=.env scripts/record-baseline.mjs austin-italian`.
+
 Optional settings: `LLM_BASE_URL`, `LLM_MODEL` (default `deepseek-flash`) and `LLM_DAILY_CAP_USD` (default 2). Any OpenAI-compatible Responses API works.
 
 ## Project layout

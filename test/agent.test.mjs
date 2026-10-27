@@ -35,7 +35,13 @@ function scriptedLlm(script) {
   return { respond: async () => ({ output: script[i++].map((c, j) => ({ type: 'function_call', call_id: `c${i}${j}`, name: c.name, arguments: JSON.stringify(c.args || {}) })) }) };
 }
 
-const playbookArgs = { best_zone_rank: 1, headline: 'h', why_here: ['w'], target_customer: 't', vibe: 'v', offer_ideas: ['o'], playlist: ['Real Artist', 'Made Up Band'], partners: ['Real Brand'], opening_pitch: 'p' };
+const playbookArgs = { best_zone_rank: 1, headline: 'h', why_here: ['w'], target_customer: 't', vibe: 'v', offer_ideas: ['o'], playlist: ['Real Artist', 'Made Up Band'], partners: ['Real Brand'], opening_pitch: 'p', sanity_checks: [{ noticed: 'Age peaks at 55+', decision: 'Kept the playlist neutral' }] };
+
+test('playbookProblem requires sanity checks with both parts', () => {
+  const zones = [{ rank: 1 }];
+  assert.match(playbookProblem({ ...playbookArgs, sanity_checks: [] }, zones), /sanity_checks/);
+  assert.match(playbookProblem({ ...playbookArgs, sanity_checks: [{ noticed: 'x' }] }, zones), /sanity_checks/);
+});
 
 test('agent flags names that did not come from Qloo', async () => {
   const llm = scriptedLlm([[{ name: 'analyze_market' }], [{ name: 'audience_taste', args: { domain: 'artist' } }], [{ name: 'submit_playbook', args: playbookArgs }]]);

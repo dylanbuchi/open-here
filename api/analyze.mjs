@@ -23,7 +23,7 @@ export default async function handler(req, res) {
     const status = err.status >= 400 && err.status < 500 ? err.status : 502;
     res.statusCode = status;
     // 4xx messages are written for users; hide upstream details otherwise.
-    res.end(JSON.stringify({ error: status === 502 ? 'Qloo is not responding right now. Try again shortly.' : err.message }));
+    res.end(JSON.stringify({ error: status === 502 ? 'Qloo is not responding right now. Try again shortly.' : err.message, suggestions: err.suggestions }));
     if (status === 502) console.error(err);
   }
 }

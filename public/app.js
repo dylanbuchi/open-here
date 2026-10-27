@@ -40,6 +40,23 @@
     $('live').textContent = 'Error: ' + msg;
   }
 
+  function showSuggestions(msg, suggestions, city) {
+    $('content').hidden = true;
+    $('agent').hidden = true;
+    $('playbook').hidden = true;
+    const chips = suggestions.map((s) => '<button class="chip" type="button" data-concept="' + esc(s) + '">' + esc(s) + ' · ' + esc(city) + '</button>').join('');
+    $('status').innerHTML = '<div class="errbox"><p>' + esc(msg) + '</p>' + (chips ? '<div class="chips">' + chips + '</div>' : '') + '</div>';
+    $('status').querySelectorAll('button[data-concept]').forEach((b) => b.addEventListener('click', () => {
+      $('concept').value = b.dataset.concept;
+      run(b.dataset.concept, city, $('brief').value);
+    }));
+    $('live').textContent = msg + ' ' + suggestions.join(', ');
+    // On phones the message sits below the map, so bring it into view.
+    $('status').scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    const first = $('status').querySelector('button[data-concept]');
+    if (first) first.focus({ preventScroll: true });
+  }
+
   function resetResults() {
     if (cmpCtl) cmpCtl.abort();
     curPlaybook = null;
@@ -132,7 +149,10 @@
   async function settle(st, my, concept, city, signal, t0, elapsedMs) {
     if (my !== seq) return;
     finishTrace(t0, elapsedMs);
-    if (st.errored && !st.gotPlaybook) {
+    if (st.errored && !st.market && Array.isArray(st.errored.suggestions)) {
+      // No data for this concept: offer concepts that do have data here.
+      showSuggestions(st.errored.message, st.errored.suggestions, city);
+    } else if (st.errored && !st.gotPlaybook) {
       if (st.errored.code === 'budget') playbookNote('The AI agent is resting for today, but the map data still works. Explore the top spots below.', true);
       else playbookNote(st.errored.message || 'The agent could not finish. The map data still works.', true);
       if (!st.market) await fallbackAnalyze(concept, city, my, signal);

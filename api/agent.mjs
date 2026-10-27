@@ -35,7 +35,7 @@ export default async function handler(req, res) {
     if (abort.signal.aborted) return res.end();
     const known = err instanceof LlmError || (err.status >= 400 && err.status < 500);
     if (!known) console.error(err);
-    send({ type: 'error', message: known ? err.message : 'The agent hit a problem. Try again.' });
+    send({ type: 'error', message: known ? err.message : 'The agent hit a problem. Try again.', suggestions: err.suggestions });
   }
   send({ type: 'done' });
   res.end();

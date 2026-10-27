@@ -29,12 +29,12 @@
     <form id="search" class="search" novalidate>
       <div class="field">
         <label for="concept">Concept</label>
-        <input id="concept" name="concept" type="text" autocomplete="off" placeholder="Italian restaurant" aria-describedby="concept-err" value="Italian restaurant">
+        <input id="concept" name="concept" type="text" autocomplete="off" list="concept-list" placeholder="Italian restaurant" aria-describedby="concept-err" value="Italian restaurant">
         <span class="err" id="concept-err" role="alert"></span>
       </div>
       <div class="field">
         <label for="city">City</label>
-        <input id="city" name="city" type="text" autocomplete="off" placeholder="Austin" aria-describedby="city-err" value="Austin">
+        <input id="city" name="city" type="text" autocomplete="off" list="city-list" placeholder="Austin" aria-describedby="city-err" value="Austin">
         <span class="err" id="city-err" role="alert"></span>
       </div>
       <div class="field brief">
@@ -43,6 +43,19 @@
       </div>
       <button type="submit" id="go" class="btn">Find my spot</button>
     </form>
+    <!-- Suggestions checked against Qloo coverage (scripts/coverage.mjs). Free typing still works. -->
+    <datalist id="concept-list">
+      <option value="Coffee shop"><option value="Italian restaurant"><option value="Bar"><option value="Cocktail bar">
+      <option value="Wine bar"><option value="Bakery"><option value="Pizza"><option value="Brunch">
+      <option value="Vegan restaurant"><option value="Thai restaurant"><option value="Indian restaurant"><option value="French restaurant">
+      <option value="Sushi"><option value="Juice bar"><option value="Burger"><option value="Ice cream">
+      <option value="Ramen"><option value="Brewery"><option value="Gym"><option value="Barbershop">
+      <option value="Bookstore"><option value="Record store"><option value="Tobacco shop"><option value="Taqueria">
+    </datalist>
+    <datalist id="city-list">
+      <option value="Austin"><option value="New York City"><option value="Los Angeles"><option value="Chicago">
+      <option value="London"><option value="Paris"><option value="Berlin"><option value="Zurich"><option value="Geneva">
+    </datalist>
     <div class="chips" aria-label="Try an example">
       <span class="chips-label">Try:</span>
       <button type="button" class="chip" data-concept="Italian restaurant" data-city="Austin" data-brief="cozy date-night spot for young couples">Italian restaurant · Austin</button>

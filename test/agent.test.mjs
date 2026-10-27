@@ -20,6 +20,7 @@ function fakeQloo(calls = []) {
       calls.push(p);
       const type = p['filter.type'];
       if (type === 'urn:entity:place' && String(p['filter.tags']).includes('airport')) return { entities: [] };
+      if (type === 'urn:entity:place' && p['filter.location']) return { entities: [1, 2, 3, 4].map(i => ({ ...place(i), entity_id: `z${i}` })) };
       if (type === 'urn:entity:place') return { entities: [1, 2, 3, 4].map(place) };
       if (type === 'urn:heatmap') return { heatmap: Array.from({ length: 30 }, (_, i) => ({ location: { latitude: 30 + i / 1000, longitude: -97 + (i % 5) / 1000, geohash: `9v6k${String(i).padStart(3, '0')}` }, query: { affinity: 0.5 + (i % 7) / 20, popularity: 0.3 + i / 60 } })) };
       if (type === 'urn:demographics') return { demographics: [] };
@@ -36,6 +37,15 @@ function scriptedLlm(script) {
 }
 
 const playbookArgs = { best_zone_rank: 1, headline: 'h', why_here: ['w'], target_customer: 't', vibe: 'v', offer_ideas: ['o'], playlist: ['Real Artist', 'Made Up Band'], partners: ['Real Brand'], opening_pitch: 'p', sanity_checks: [{ noticed: 'Age peaks at 55+', decision: 'Kept the playlist neutral' }] };
+
+test('zone_taste is signalled by the zone\'s own places, not the concept seeds', async () => {
+  const calls = [];
+  const llm = scriptedLlm([[{ name: 'analyze_market' }], [{ name: 'zone_taste', args: { rank: 1, domain: 'artist' } }], [{ name: 'submit_playbook', args: playbookArgs }]]);
+  await runAgent({ concept: 'Test food', city: 'Austin' }, () => {}, { qloo: fakeQloo(calls), llm });
+  const zoneCall = calls.filter(p => p['filter.type'] === 'urn:entity:artist').pop();
+  assert.ok(zoneCall['signal.interests.entities'].every(id => id.startsWith('z')));
+  assert.equal(zoneCall['signal.location.query'], 'Austin');
+});
 
 test('playbookProblem requires sanity checks with both parts', () => {
   const zones = [{ rank: 1 }];

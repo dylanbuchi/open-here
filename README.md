@@ -38,13 +38,15 @@ concept + city + brief
         │
         ▼
   Agent (LLM with tools)  ──►  analyze_market   Qloo tags, places, heatmap, demographics, cross-domain taste
-        │                  ──►  zone_taste       what people around one spot love (Qloo, location signal)
+        │                  ──►  zone_taste       what fans of the places in one zone love (signalled by those places)
         │                  ──►  audience_taste   the audience's taste in a domain, optionally by age band
         ▼
   submit_playbook  ──►  validated server-side, names checked against Qloo results by domain
 ```
 
-**How we call Qloo.** The server calls Qloo's REST API directly (`/v2/tags`, `/v2/insights`, `/search`) with the event-issued key, which stays in server environment variables and never reaches the browser. We didn't use the `@qloo/qloo-harness` CLI or MCP package, because the agent needed fine control over heatmaps, demographics and location signals. Results are cached for 30 minutes, at most 4 calls run at once, and 429 or 5xx responses get a short bounded retry.
+**How we call Qloo.** The server calls Qloo's REST API directly (`/v2/tags`, `/v2/insights`, `/search`) with the event-issued key, which stays in server environment variables and never reaches the browser. We didn't use the `@qloo/qloo-harness` CLI or MCP package, because the agent needed fine control over heatmaps, demographics and location signals. Results are cached for 30 minutes, at most 4 calls run at once and starts are paced under 8 a second, and 429 or 5xx responses get a short bounded retry.
+
+**Zone taste comes from the zone's own places.** Qloo silently ignores or barely weighs some parameters, so we tested ours. A location point alone hardly changed the answer: two Austin zones 15 km apart returned nearly identical artists. Signalling with the places actually in a zone does: fans of South Lamar's record and vintage shops lean to Rayland Baxter and Nikki Lane, while The Domain's crowd leans mainstream country and Louis the Child.
 
 ### Request to result: Italian date night in Austin
 

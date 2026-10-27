@@ -425,6 +425,32 @@
     if (matchMedia('(max-width:899px)').matches) $('map').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
   }
 
+  const COMP_STYLE = { radius: 4.5, color: '#fff', weight: 1.5, fillColor: '#2f5d4a', fillOpacity: 0.85 };
+  const COMP_ACTIVE = { radius: 9, color: '#fff', weight: 3, fillColor: '#c8502d', fillOpacity: 1 };
+  let compMarkers = [];
+  let activeComp = -1;
+
+  // Links a competitor's list row and map pin. From the list it flies the
+  // map there; from the map it reveals the row in the list.
+  function selectComp(i, fromMap) {
+    const m = compMarkers[i];
+    if (!m) return;
+    if (compMarkers[activeComp]) compMarkers[activeComp].setStyle(COMP_STYLE);
+    activeComp = i;
+    m.setStyle(COMP_ACTIVE).bringToFront();
+    document.querySelectorAll('.comp-item').forEach((el) => el.setAttribute('aria-pressed', String(+el.dataset.i === i)));
+    const row = document.querySelector('.comp-item[data-i="' + i + '"]');
+    if (fromMap) {
+      $('comp').open = true;
+      if (row) row.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
+      return;
+    }
+    const ll = m.getLatLng();
+    if (reduced) map.setView(ll, 16); else map.flyTo(ll, 16, { duration: 1 });
+    map.once('moveend', () => m.openPopup());
+    if (matchMedia('(max-width:899px)').matches) $('map').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
+  }
+
   function drawMap(d) {
     layers.remove();
     layers = L.layerGroup().addTo(map);
@@ -436,9 +462,13 @@
         gradient: { 0.2: '#f6dc8f', 0.5: '#eaa23a', 0.8: '#d9532b', 1: '#8e2a14' }
       }).addTo(layers);
     }
-    (d.competitors || []).forEach((c) => {
-      L.circleMarker([c.lat, c.lon], { radius: 4.5, color: '#fff', weight: 1.5, fillColor: '#2f5d4a', fillOpacity: 0.85 })
+    compMarkers = [];
+    activeComp = -1;
+    (d.competitors || []).forEach((c, i) => {
+      const m = L.circleMarker([c.lat, c.lon], COMP_STYLE)
         .bindPopup('<b>' + esc(c.name) + '</b><br>' + esc(c.address || '')).addTo(layers);
+      m.on('click', () => selectComp(i, true));
+      compMarkers.push(m);
       pts.push([c.lat, c.lon]);
     });
     (d.zones || []).forEach((z) => {
@@ -503,9 +533,11 @@
     $('empty').hidden = zones.length > 0;
     $('lowsignal').hidden = !(d.lowSignal && zones.length);
     const maxLift = Math.max(0.0001, ...zones.map((z) => z.lift));
+    const topN = (d.competitors || []).length;
+    const compTip = ' title="Based on Qloo\'s ' + topN + ' most popular matching places. Smaller spots may not be counted."';
     $('zones').innerHTML = zones.map((z) => {
       const n = z.competitorsWithin1km;
-      const badge = typeof n !== 'number' ? '' : n === 0 ? '<span class="badge">No sampled competitors within 1 km</span>' : '<span class="badge busy">' + n + ' sampled competitor' + (n === 1 ? '' : 's') + ' within 1 km</span>';
+      const badge = typeof n !== 'number' ? '' : n === 0 ? '<span class="badge"' + compTip + '>None of the top ' + topN + ' within 1 km</span>' : '<span class="badge busy"' + compTip + '>' + n + ' of the top ' + topN + ' within 1 km</span>';
       const lm = z.landmark || {};
       return '<li><button type="button" class="zone" data-rank="' + z.rank + '" aria-label="Zone ' + z.rank + ', near ' + esc(lm.name || 'this spot') + '. Fly to zone on map">' +
         '<span class="num" aria-hidden="true">' + z.rank + '</span><span><div class="zname">Near ' + esc(lm.name || 'this spot') + '</div>' +
@@ -519,8 +551,9 @@
     renderAudience(d.audience || {});
     renderLove(d.audience || {});
     const comps = d.competitors || [];
-    $('comp-sum').textContent = 'Top ' + comps.length + ' matching place' + (comps.length === 1 ? '' : 's') + ' (sample)';
-    $('comp-list').innerHTML = comps.map((c) => '<li>' + esc(c.name) + '<small>' + esc(c.address || '') + '</small></li>').join('');
+    $('comp-sum').textContent = 'Top ' + comps.length + ' most popular in ' + d.city + ' · tap one to see it on the map';
+    $('comp-list').innerHTML = comps.map((c, i) => '<li><button type="button" class="comp-item" data-i="' + i + '" aria-pressed="false" aria-label="' + esc(c.name) + ', show on map">' + esc(c.name) + '<small>' + esc(c.address || '') + '</small></button></li>').join('');
+    $('comp-list').querySelectorAll('.comp-item').forEach((el) => el.addEventListener('click', () => selectComp(+el.dataset.i, false)));
     $('live').textContent = zones.length ? 'Found ' + zones.length + ' top spots for ' + d.concept + ' in ' + d.city + '.' : 'No standout zones found.';
     $('results').scrollTop = 0;
   }

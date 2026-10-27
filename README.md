@@ -14,9 +14,22 @@ Open Here is an AI location scout for people opening a local business. Give it a
 
 ## Why Qloo is the difference
 
-Click **Compare with plain AI** on any playbook. The same model gets the same brief with no Qloo tools, and its picks are checked against Qloo's results for that audience.
+Click **Compare with plain AI** on any playbook. The same model gets the same brief with no Qloo tools. Then Open Here puts the plain AI's neighborhood on the same Qloo taste map and measures it exactly like its own spots: taste lift, and how many of the city's most popular competitors sit within 1 km.
 
-For the bundled Austin example, the plain AI suggests a generic date-night soundtrack (Norah Jones, Sade, Chet Baker) and vague partners ("Local florists"). **None of its 10 picks** appear in Qloo's top results for people who love Austin's Italian spots. With Qloo, Open Here finds that crowd actually loves Texas country (Randy Rogers Band, Turnpike Troubadours) and local brands like Central Market and Kendra Scott, and it places the restaurant by measured taste, not guesswork.
+In the bundled examples:
+
+| Example | Plain AI's pick | Open Here's pick |
+|---|---|---|
+| Italian date night, Austin | East Austin: taste lift −1 | South Lamar: +15 |
+| Ramen, Los Angeles | Little Tokyo: +2, with 8 popular competitors within 1 km | Los Feliz: +37 |
+| Wine bar, Brooklyn | Bushwick North: −7 (next to our #3 spot) | Williamsburg: +15 |
+| Taqueria, Chicago | Pilsen: +15, a good pick | Armour Square: +20 |
+
+A plain AI can name a plausible neighborhood. It can't see where demand beats popularity, which competitors are already there, or who the audience is. Sometimes its instinct is good (Chicago), and the app says so.
+
+## The agent double-checks Qloo
+
+Before it commits to a plan, the agent records 1 to 3 surprising Qloo results and what it did about them. For example: "Qloo's top artists in South Lamar are country acts, a mismatch for red-sauce romantic dining", so the playlist blends them in rather than leading with them. These checks appear in every playbook under "What the agent double-checked".
 
 ## How it works
 

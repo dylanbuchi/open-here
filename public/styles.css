@@ -224,3 +224,20 @@ details summary{cursor:pointer;font-weight:600;padding:4px 0}
 .best-sub{display:block;font-size:13px;opacity:.9}
 .cmp-near{color:var(--ink-2);font-size:13px}
 .place-hint b{font-weight:600}
+
+.lg-ai{background:#fff;border:2px solid #6b7280;box-shadow:0 0 0 1px #fff}
+.aipin{width:30px;height:30px;border-radius:50%;background:#fff;border:2.5px solid #6b7280;color:#4b5563;font:600 11px/25px var(--body);text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.checks{list-style:none;margin:0 0 4px;padding:0;display:grid;gap:8px}
+.checks li{padding:8px 10px;border-left:3px solid var(--line);background:var(--paper-2);border-radius:0 8px 8px 0;font-size:13.5px}
+.checks p{margin:0}
+.checks p+p{margin-top:3px;color:var(--ink-2)}
+.loc-row{display:grid;grid-template-columns:1fr;gap:10px;margin:0 0 6px}
+.loc-side{padding:12px 14px;border-radius:12px;min-width:0;overflow-wrap:anywhere}
+.loc-side.plain{background:var(--paper-2);border:1.5px dashed var(--line);color:var(--ink-2)}
+.loc-side.qloo{background:#f1f7f3;border:1.5px solid var(--green)}
+.loc-side small{display:block;font-size:12px;color:var(--ink-2)}
+.loc-side b{display:block;font-family:var(--display);font-size:18px;color:var(--ink)}
+.loc-m{display:block;font-size:13px;margin-top:2px}
+.loc-note,.loc-miss{margin:0 0 12px;font-size:13.5px;color:var(--ink-2)}
+.loc-miss{padding:10px 12px;border:1.5px dashed var(--line);border-radius:12px;background:var(--paper-2)}
+@media (min-width:560px){.loc-row{grid-template-columns:1fr 1fr}}

@@ -69,9 +69,10 @@
     <div class="mapwrap">
       <div id="map" role="application" aria-label="Map of recommended spots"></div>
       <div class="legend" aria-hidden="true">
-        <span title="Taste lift: how much more this crowd is drawn here than the area's general popularity predicts (in points)."><i class="lg-heat"></i>Taste lift (points)</span>
+        <span title="Taste lift: how much more this crowd is drawn here than the area's general popularity predicts. 1 point = 1 point of Qloo affinity (0–100) above what the area's general popularity predicts."><i class="lg-heat"></i>Taste lift (points)</span>
         <span><i class="lg-zone"></i>Top spots</span>
         <span><i class="lg-comp"></i>Popular competitors</span>
+        <span id="lg-ai" hidden><i class="lg-ai"></i>Plain AI's pick</span>
       </div>
       <div id="maploading" class="maploading" hidden><div class="spinner"></div><p>Reading the city's taste…</p></div>
     </div>
@@ -92,7 +93,7 @@
       <div id="content" hidden>
         <h2 id="headline" class="headline"></h2>
         <p id="place" class="place" hidden></p>
-        <p class="lift-line"><strong>Taste lift</strong>: how much more this crowd is drawn here than the area's general popularity predicts (in points). A scouting signal, not a guarantee.</p>
+        <p class="lift-line"><strong>Taste lift</strong>: how much more this crowd is drawn here than the area's general popularity predicts (in points). 1 point = 1 point of Qloo affinity (0–100) above what the area's general popularity predicts. A scouting signal, not a guarantee.</p>
 
         <section aria-labelledby="h-zones">
           <h3 id="h-zones" class="sec">Top places to open</h3>

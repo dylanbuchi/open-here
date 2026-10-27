@@ -18,6 +18,8 @@
   let curPlaybook = null;
   let cmpCtl = null;
   let exSlug = null;
+  let curMarket = null;
+  let aiPin = null;
   const lp = (lift) => fmtSigned((+lift || 0) * 100, 0);
   const isPhone = () => matchMedia('(max-width:899px)').matches;
   let wantJump = false;
@@ -82,6 +84,7 @@
 
   function resetResults() {
     if (cmpCtl) cmpCtl.abort();
+    clearAiPin();
     curPlaybook = null;
     $('compare').innerHTML = '';
     $('results').classList.remove('wide');
@@ -118,12 +121,16 @@
     return (n > 0 ? '+' : '\u2212') + r.toFixed(digits || 0);
   }
 
+  function completeSteps() {
+    $('agent-steps').querySelectorAll('li.current').forEach((li) => { li.classList.remove('current'); li.classList.add('ok'); });
+  }
+
   function finishTrace(t0, elapsedMs) {
     const ol = $('agent-steps');
-    ol.querySelectorAll('li.current').forEach((li) => { li.classList.remove('current'); li.classList.add('ok'); });
+    completeSteps();
     const n = ol.children.length;
     $('agent').classList.add('done');
-    $('agent-title').textContent = n ? 'Agent took ' + n + ' step' + (n === 1 ? '' : 's') + ' · ' + ((elapsedMs != null ? elapsedMs : Date.now() - t0) / 1000).toFixed(1) + 's' : 'Agent finished';
+    $('agent-title').textContent = n ? (isExample ? 'Recorded run · ' : 'Agent took ') + n + ' step' + (n === 1 ? '' : 's') + ' · ' + ((elapsedMs != null ? elapsedMs : Date.now() - t0) / 1000).toFixed(1) + 's' : 'Agent finished';
     $('agent').open = false;
   }
 
@@ -157,7 +164,7 @@
       if (my !== seq || !ev || typeof ev !== 'object') return;
       if (ev.type === 'step') addStep(ev.label || 'Working…');
       else if (ev.type === 'market' && ev.data) { render(ev.data); st.market = ev.data; }
-      else if (ev.type === 'playbook' && ev.data) { renderPlaybook(ev.data); st.gotPlaybook = true; }
+      else if (ev.type === 'playbook' && ev.data) { renderPlaybook(ev.data); st.gotPlaybook = true; completeSteps(); }
       else if (ev.type === 'error') st.errored = ev;
     };
   }
@@ -264,6 +271,7 @@
     $('city').value = last.city;
     $('brief').value = last.brief;
     const my = begin(last.concept, last.city, last.brief);
+    $('agent-title').textContent = 'Replaying a recorded run';
     if (scroll) toAgent();
     const signal = ctl.signal;
     const st = { market: null, gotPlaybook: false, errored: null };
@@ -334,6 +342,8 @@
       html += '<button type="button" class="best" id="best-btn" aria-label="Fly the map to the best spot, number ' + esc(bz.rank) + ', ' + esc(nb ? nb + (nr ? ', near ' + nr : '') : 'near ' + nr) + '"><span class="num" aria-hidden="true">' + esc(bz.rank) + '</span><span><small>Best spot</small><b>#' + esc(bz.rank) + ' ' + esc(title) + '</b>' + sub + '</span><span class="go" aria-hidden="true">Show on map &rarr;</span></button>';
     }
     if (p.whyHere && p.whyHere.length) html += '<h4 class="pb-sub">Why here</h4><ul class="why">' + list(p.whyHere) + '</ul>';
+    const sc = (p.sanityChecks || []).filter((x) => x && (x.noticed || x.decision)).slice(0, 3);
+    if (sc.length) html += '<h4 class="pb-sub">What the agent double-checked</h4><ul class="checks">' + sc.map((x) => '<li>' + (x.noticed ? '<p><b>Noticed:</b> ' + esc(x.noticed) + '</p>' : '') + (x.decision ? '<p><b>Decided:</b> ' + esc(x.decision) + '</p>' : '') + '</li>').join('') + '</ul>';
     html += '<div class="pb-grid"><div><h4 class="pb-sub">Target customer</h4><p>' + esc(p.targetCustomer) + '</p></div><div><h4 class="pb-sub">Vibe</h4><p>' + esc(p.vibe) + '</p></div></div>';
     if (p.offerIdeas && p.offerIdeas.length) html += '<h4 class="pb-sub">Offer ideas</h4><ul class="why">' + list(p.offerIdeas) + '</ul>';
     if (p.playlist && p.playlist.length) html += '<h4 class="pb-sub">Playlist</h4><ul class="pchips">' + chipList(p.playlist) + '</ul>';
@@ -422,16 +432,54 @@
     }).join('');
   }
 
+  const nOk = (n) => typeof n === 'number' && isFinite(n);
+  const liftTxt = (pts) => nOk(pts) ? 'Taste lift ' + fmtSigned(pts, 0) : 'Taste lift n/a';
+  function ourZone() {
+    const z = (curMarket && curMarket.zones) || [];
+    const r = curPlaybook && curPlaybook.bestZone && curPlaybook.bestZone.rank;
+    return z.find((q) => q.rank === r) || z[0] || null;
+  }
+  function locSummary(loc) {
+    if (!loc) return '';
+    return loc.found ? ' Plain AI picked ' + loc.name + ', ' + liftTxt(loc.liftPoints).toLowerCase() + ' points.' : ' The plain AI pick could not be placed on the map.';
+  }
+  function locationRow(loc) {
+    if (!loc || !loc.name) return '';
+    const city = (curMarket && curMarket.city) || (last && last.city) || 'the city';
+    if (!loc.found) return '<p class="loc-miss">We couldn\'t place \'' + esc(loc.name) + '\' inside ' + esc(city) + ' on the map, so it can\'t be measured.</p>';
+    const topN = curMarket && (curMarket.competitors || []).length;
+    const comp = (n, of) => typeof n === 'number' ? ' \u00b7 ' + n + ' of ' + (of || 'the top') + (of ? '' : '') + ' ' + (of ? 'top competitors' : 'competitors') + ' within 1 km' : '';
+    const z = ourZone();
+    const ours = z ? '<b>' + esc(placeName(z)) + '</b><span class="loc-m">' + esc(liftTxt(+(z.lift * 100))) + comp(z.competitorsWithin1km, topN) + '</span>' : '<b>n/a</b>';
+    const agree = nOk(loc.agreesWithZone) ? '<p class="loc-note">Plain AI\'s pick sits next to our #' + esc(loc.agreesWithZone) + ' spot.</p>' : '';
+    return '<div class="loc-row"><div class="loc-side plain"><small>Plain AI\'s pick</small><b>' + esc(loc.name) + '</b><span class="loc-m">' + esc(liftTxt(loc.liftPoints)) + comp(loc.competitorsWithin1km, loc.competitorSample) + '</span></div>' +
+      '<div class="loc-side qloo"><small>Open Here\'s best zone</small>' + ours + '</div></div>' + agree;
+  }
+  function clearAiPin() {
+    if (aiPin) { aiPin.remove(); aiPin = null; }
+    const lg = $('lg-ai'); if (lg) lg.hidden = true;
+  }
+  function showAiPin(loc) {
+    clearAiPin();
+    if (!loc || !loc.found || !nOk(loc.lat) || !nOk(loc.lon)) return;
+    const icon = L.divIcon({ className: 'zone-icon', html: '<div class="aipin">AI</div>', iconSize: [30, 30], iconAnchor: [15, 15] });
+    aiPin = L.marker([loc.lat, loc.lon], { icon, zIndexOffset: 500, title: 'Plain AI pick: ' + loc.name })
+      .bindPopup('<b>Plain AI\'s pick: ' + esc(loc.name) + '</b><br>' + esc(liftTxt(loc.liftPoints)) + (nOk(loc.liftPoints) ? ' pts' : '')).addTo(map);
+    $('lg-ai').hidden = false;
+    const pts = [[loc.lat, loc.lon]];
+    ((curMarket && curMarket.zones) || []).forEach((z) => pts.push([z.lat, z.lon]));
+    if (pts.length > 1 && !map.getBounds().contains([loc.lat, loc.lon])) map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [60, 60], paddingBottomRight: [40, 40], maxZoom: 14 });
+  }
+
   function renderCompare(b, p, example) {
     p = p || {};
     const pl = p.playlist || [], pp = p.partners || [];
-    const sc = b.score || {};
-    const lMatch = +sc.matched || 0, lTotal = +sc.total || 0;
     const bz = p.bestZone;
+    const locRow = locationRow(b.location);
     const sect = (t, body) => body ? '<h5 class="pb-sub">' + t + '</h5>' + body : '';
     const chips = (html) => html ? '<ul class="pchips">' + html + '</ul>' : '';
     const html = '<section class="cmp" aria-labelledby="cmp-h">' +
-      '<h3 id="cmp-h" class="sec">What Qloo knows that a plain AI doesn\'t</h3>' +
+      '<h3 id="cmp-h" class="sec">What Qloo knows that a plain AI doesn\'t</h3>' + locRow +
       '<div class="cmp-cols">' +
       '<div class="cmp-col plain"><h4 class="cmp-title">Plain AI · no Qloo data</h4>' +
         sect('Neighborhood', b.neighborhood ? '<p>' + esc(b.neighborhood) + '</p>' : '') +
@@ -447,13 +495,13 @@
         sect('Why here', (p.whyHere && p.whyHere.length) ? '<ul class="why">' + p.whyHere.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') +
         sect('Target customer', p.targetCustomer ? '<p>' + esc(p.targetCustomer) + '</p>' : '') +
       '</div></div>' +
-      (lTotal ? '<p class="cmp-sum">' + lMatch + ' of ' + lTotal + ' plain-AI picks show up in Qloo\'s measured taste for this crowd.</p>' : '') +
-      '<p class="cmp-cap">Same model, same brief. Only one had Qloo\'s taste data. Plain-AI picks can still be good; they\'re just not backed by measured taste for this audience.' + (example ? ' Recorded example, no live call.' : '') + '</p>' +
+      '<p class="cmp-cap">Same model, same brief. We measured both picks on the same Qloo taste map; only Open Here could see it.' + (example ? ' Recorded example, no live call.' : '') + '</p>' +
       '</section>';
     $('compare').innerHTML = html;
     $('results').classList.add('wide');
     setTimeout(() => map.invalidateSize(), 50);
-    $('live').textContent = 'Comparison ready.' + (lTotal ? ' ' + lMatch + ' of ' + lTotal + " plain-AI picks show up in Qloo's measured taste for this crowd." : '');
+    $('live').textContent = 'Comparison ready.' + locSummary(b.location);
+    showAiPin(b.location);
     const sec = $('compare').querySelector('.cmp');
     if (sec && sec.scrollIntoView) sec.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
   }
@@ -565,6 +613,8 @@
   }
 
   function render(d) {
+    curMarket = d;
+    clearAiPin();
     $('status').innerHTML = '';
     $('maploading').hidden = true;
     $('content').hidden = false;

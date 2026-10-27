@@ -187,3 +187,29 @@ details summary{cursor:pointer;font-weight:600;padding:4px 0}
 .lowsignal{margin:0 0 10px;padding:10px 12px;background:#fbf0d6;border-left:4px solid var(--gold);border-radius:0 10px 10px 0;font-size:14px}
 .dvcap{margin:0 0 6px;font-size:12.5px;color:var(--ink-2)}
 .gender-line{margin:10px 0 0;font-size:14px}
+
+.compare{margin-top:14px}
+.compare:empty{display:none}
+.cmp-btn{width:100%}
+.cmp-hint{margin:8px 0 0}
+.cmp-wait{display:flex;align-items:center;gap:12px;padding:14px;background:var(--card);border:1.5px dashed var(--line);border-radius:var(--r);font-family:var(--display);font-size:16px}
+.cmp-wait p{margin:0}
+.cmp-wait .spinner{width:24px;height:24px;border-width:3px;flex:none}
+.cmp .sec{margin-top:6px}
+.cmp-sum{margin:0 0 12px;font-size:15px;line-height:1.4}
+.cmp-sum b{font-family:var(--display);font-size:18px}
+.cmp-l{display:block;color:var(--ink-2)}
+.cmp-r{display:block;color:var(--green);font-weight:600;margin-top:2px}
+.cmp-cols{display:grid;grid-template-columns:1fr;gap:12px}
+.cmp-col{padding:12px 14px;border-radius:12px;min-width:0;overflow-wrap:anywhere}
+.cmp-col.plain{background:var(--paper-2);border:1.5px dashed var(--line);color:var(--ink-2)}
+.cmp-col.qloo{background:#f1f7f3;border:1.5px solid var(--green)}
+.cmp-title{margin:0;font-family:var(--display);font-size:16px;color:var(--ink)}
+.pchip.nq{background:transparent;border:1.5px dashed var(--line);color:var(--ink-2);padding-right:10px}
+.cmp-cap{margin:10px 0 0;font-size:12.5px;color:var(--ink-2)}
+@media (min-width:560px){
+  .cmp-cols{grid-template-columns:1fr 1fr}
+}
+@media (min-width:900px){
+  .panel.wide{width:min(760px,62vw)}
+}

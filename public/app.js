@@ -14,6 +14,9 @@
   let zoneMarkers = [];
   let seq = 0;
   let last = null;
+  let isExample = false;
+  let curPlaybook = null;
+  let cmpCtl = null;
 
   function street(address, city) {
     if (!address) return '';
@@ -38,6 +41,10 @@
   }
 
   function resetResults() {
+    if (cmpCtl) cmpCtl.abort();
+    curPlaybook = null;
+    $('compare').innerHTML = '';
+    $('results').classList.remove('wide');
     $('example-note').hidden = true;
     $('content').hidden = true;
     $('status').innerHTML = '';
@@ -138,6 +145,7 @@
   async function run(concept, city, brief) {
     brief = (brief || '').trim().slice(0, 240);
     last = { concept, city, brief };
+    isExample = false;
     const t0 = Date.now();
     const my = begin(concept, city, brief);
     const signal = ctl.signal;
@@ -194,6 +202,7 @@
 
   // First load: replay a recorded agent run through the same handler. No API calls.
   async function replayExample() {
+    isExample = true;
     last = { concept: 'Italian restaurant', city: 'Austin', brief: 'cozy date-night spot for young couples' };
     $('concept').value = last.concept;
     $('city').value = last.city;
@@ -291,7 +300,101 @@
       $('live').textContent = 'Opening pitch copied to clipboard.';
       setTimeout(() => { cb.textContent = 'Copy'; cb.classList.remove('ok'); }, 2000);
     });
+    curPlaybook = p;
+    renderCompareButton();
     $('live').textContent = 'Launch playbook ready: ' + p.headline;
+  }
+
+  // "Without Qloo" comparison. Example mode loads the recorded JSON; live mode calls /api/baseline.
+  function renderCompareButton() {
+    $('compare').innerHTML = '<button type="button" class="btn cmp-btn" id="cmp-btn">Compare with plain AI (no Qloo)</button><p class="hint cmp-hint">See what the same model picks without Qloo\'s taste data.</p>';
+    $('cmp-btn').addEventListener('click', loadCompare);
+  }
+
+  function cmpError(msg) {
+    $('compare').innerHTML = '<div class="errbox"><p>' + esc(msg) + '</p><button class="btn" id="cmp-retry" type="button">Try again</button></div>';
+    $('cmp-retry').addEventListener('click', loadCompare);
+  }
+
+  async function loadCompare() {
+    const my = seq;
+    if (cmpCtl) cmpCtl.abort();
+    cmpCtl = new AbortController();
+    const signal = cmpCtl.signal;
+    const c = last || {};
+    $('compare').innerHTML = '<div class="cmp-wait"><div class="spinner" aria-hidden="true"></div><p>Asking a plain AI without Qloo…</p></div>';
+    $('live').textContent = 'Asking a plain AI without Qloo…';
+    try {
+      let result;
+      if (isExample) {
+        const r = await fetch('/examples/austin-italian-baseline.json', { signal });
+        if (!r.ok) throw new Error('Could not load the recorded comparison.');
+        const ex = await r.json();
+        result = ex && ex.result;
+      } else {
+        const params = { concept: c.concept, city: c.city };
+        if (c.brief) params.brief = c.brief;
+        const r = await fetch('/api/baseline?' + new URLSearchParams(params), { signal });
+        let data = null;
+        try { data = await r.json(); } catch { /* non-JSON */ }
+        if (!r.ok || !data || data.error) throw new Error((data && data.error) || 'Something went wrong (' + r.status + '). Please try again.');
+        result = data;
+      }
+      if (my !== seq) return;
+      if (!result || !result.score) throw new Error('The comparison came back incomplete. Please try again.');
+      renderCompare(result, curPlaybook, isExample);
+    } catch (e) {
+      if (my !== seq || e.name === 'AbortError') return;
+      const m = e.message === 'Failed to fetch' ? NET_MSG : e.message;
+      cmpError(m);
+      $('live').textContent = 'Comparison failed: ' + m;
+    }
+  }
+
+  function cmpChips(arr) {
+    return (arr || []).map((x) => {
+      const q = !!(x && x.inQloo);
+      const t = "Not among Qloo's top results for this audience";
+      return '<li class="pchip ' + (q ? 'q' : 'nq') + '" tabindex="0"' + (q ? '' : ' title="' + esc(t) + '"') + ' aria-label="' + esc((x && x.name) + '. ' + (q ? 'In Qloo data' : t)) + '"><span>' + esc(x && x.name) + '</span>' + (q ? '<span class="qmark">in Qloo data</span>' : '') + '</li>';
+    }).join('');
+  }
+
+  function renderCompare(b, p, example) {
+    p = p || {};
+    const lp = p.playlist || [], pp = p.partners || [];
+    const rTotal = lp.length + pp.length;
+    const rMatch = lp.concat(pp).filter((x) => x && x.fromQloo).length;
+    const sc = b.score || {};
+    const lMatch = +sc.matched || 0, lTotal = +sc.total || 0;
+    const bz = p.bestZone;
+    const sect = (t, body) => body ? '<h5 class="pb-sub">' + t + '</h5>' + body : '';
+    const chips = (html) => html ? '<ul class="pchips">' + html + '</ul>' : '';
+    const html = '<section class="cmp" aria-labelledby="cmp-h">' +
+      '<h3 id="cmp-h" class="sec">Without Qloo</h3>' +
+      '<p class="cmp-sum"><span class="cmp-l">Plain AI: <b>' + lMatch + ' of ' + lTotal + '</b> picks appear in Qloo\'s top results for this crowd.</span> <span class="cmp-r">Open Here: <b>' + rMatch + ' of ' + rTotal + '</b> verified.</span></p>' +
+      '<div class="cmp-cols">' +
+      '<div class="cmp-col plain"><h4 class="cmp-title">Plain AI · no Qloo data</h4>' +
+        sect('Neighborhood', b.neighborhood ? '<p>' + esc(b.neighborhood) + '</p>' : '') +
+        sect('Why here', b.whyHere ? '<p>' + esc(b.whyHere) + '</p>' : '') +
+        sect('Target customer', b.targetCustomer ? '<p>' + esc(b.targetCustomer) + '</p>' : '') +
+        sect('Playlist', chips(cmpChips(b.playlist))) +
+        sect('Partners', chips(cmpChips(b.partners))) +
+      '</div>' +
+      '<div class="cmp-col qloo"><h4 class="cmp-title">Open Here · Qloo-grounded</h4>' +
+        sect('Best zone', bz ? '<p>#' + esc(bz.rank) + ' near ' + esc(bz.near) + '</p>' : '') +
+        sect('Why here', (p.whyHere && p.whyHere.length) ? '<ul class="why">' + p.whyHere.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') +
+        sect('Target customer', p.targetCustomer ? '<p>' + esc(p.targetCustomer) + '</p>' : '') +
+        sect('Playlist', chips(chipList(lp))) +
+        sect('Partners', chips(chipList(pp))) +
+      '</div></div>' +
+      '<p class="cmp-cap">Same model, same brief. The only difference is access to Qloo\'s taste data. "Not in Qloo\'s top results" doesn\'t mean wrong, just not supported by measured taste for this audience.' + (example ? ' Recorded example, no live call.' : '') + '</p>' +
+      '</section>';
+    $('compare').innerHTML = html;
+    $('results').classList.add('wide');
+    setTimeout(() => map.invalidateSize(), 50);
+    $('live').textContent = 'Plain AI: ' + lMatch + ' of ' + lTotal + " picks appear in Qloo's top results for this crowd. Open Here: " + rMatch + ' of ' + rTotal + ' verified.';
+    const sec = $('compare').querySelector('.cmp');
+    if (sec && sec.scrollIntoView) sec.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
   }
 
   function flyTo(rank, lat, lon) {

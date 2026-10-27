@@ -29,7 +29,6 @@
   }
 
   let ctl = null;
-  let market = null;
 
   function showError(msg) {
     $('content').hidden = true;
@@ -39,7 +38,7 @@
   }
 
   function resetResults() {
-    market = null;
+    $('example-note').hidden = true;
     $('content').hidden = true;
     $('status').innerHTML = '';
     $('agent-steps').innerHTML = '';
@@ -62,12 +61,19 @@
     ol.appendChild(li);
   }
 
-  function finishTrace(t0) {
+  function fmtSigned(n, digits) {
+    const f = Math.pow(10, digits || 0);
+    const r = Math.round(Math.abs(n) * f) / f;
+    if (!isFinite(r) || r === 0) return '0';
+    return (n > 0 ? '+' : '\u2212') + r.toFixed(digits || 0);
+  }
+
+  function finishTrace(t0, elapsedMs) {
     const ol = $('agent-steps');
     ol.querySelectorAll('li.current').forEach((li) => { li.classList.remove('current'); li.classList.add('ok'); });
     const n = ol.children.length;
     $('agent').classList.add('done');
-    $('agent-title').textContent = n ? 'Agent took ' + n + ' step' + (n === 1 ? '' : 's') + ' · ' + ((Date.now() - t0) / 1000).toFixed(1) + 's' : 'Agent finished';
+    $('agent-title').textContent = n ? 'Agent took ' + n + ' step' + (n === 1 ? '' : 's') + ' · ' + ((elapsedMs != null ? elapsedMs : Date.now() - t0) / 1000).toFixed(1) + 's' : 'Agent finished';
     $('agent').open = false;
   }
 
@@ -90,61 +96,152 @@
     }
   }
 
-  async function run(concept, city, brief) {
+  const NET_MSG = 'Could not reach the server. Check your connection and try again.';
+  const STALL_MS = 30000;
+  const TOTAL_MS = 70000;
+
+  // Shared event handler for live streams and recorded replays. State is only
+  // updated after rendering succeeds; render errors propagate to the caller.
+  function makeHandler(my, st) {
+    return (ev) => {
+      if (my !== seq || !ev || typeof ev !== 'object') return;
+      if (ev.type === 'step') addStep(ev.label || 'Working…');
+      else if (ev.type === 'market' && ev.data) { render(ev.data); st.market = ev.data; }
+      else if (ev.type === 'playbook' && ev.data) { renderPlaybook(ev.data); st.gotPlaybook = true; }
+      else if (ev.type === 'error') st.errored = ev;
+    };
+  }
+
+  function begin(concept, city, brief) {
     if (ctl) ctl.abort();
     ctl = new AbortController();
-    const signal = ctl.signal;
     const my = ++seq;
-    brief = (brief || '').trim().slice(0, 240);
-    last = { concept, city, brief };
-    const t0 = Date.now();
     setBusy(true);
     resetResults();
     $('live').textContent = 'The agent is analyzing ' + concept + ' in ' + city + '…';
-    let gotPlaybook = false;
-    let errored = null;
-    const handle = (ev) => {
-      if (my !== seq || !ev || typeof ev !== 'object') return;
-      if (ev.type === 'step') addStep(ev.label || 'Working…');
-      else if (ev.type === 'market' && ev.data) { market = ev.data; render(ev.data); }
-      else if (ev.type === 'playbook' && ev.data) { gotPlaybook = true; renderPlaybook(ev.data); }
-      else if (ev.type === 'error') errored = ev;
-    };
+    return my;
+  }
+
+  async function settle(st, my, concept, city, signal, t0, elapsedMs) {
+    if (my !== seq) return;
+    finishTrace(t0, elapsedMs);
+    if (st.errored && !st.gotPlaybook) {
+      if (st.errored.code === 'budget') playbookNote('The AI agent is resting for today, but the map data still works. Explore the top spots below.', true);
+      else playbookNote(st.errored.message || 'The agent could not finish. The map data still works.', true);
+      if (!st.market) await fallbackAnalyze(concept, city, my, signal);
+    } else if (!st.gotPlaybook) {
+      playbookNote('The agent finished without a playbook. The map data still works.', true);
+      if (!st.market) await fallbackAnalyze(concept, city, my, signal);
+    }
+  }
+
+  async function run(concept, city, brief) {
+    brief = (brief || '').trim().slice(0, 240);
+    last = { concept, city, brief };
+    const t0 = Date.now();
+    const my = begin(concept, city, brief);
+    const signal = ctl.signal;
+    const st = { market: null, gotPlaybook: false, errored: null };
+    const handle = makeHandler(my, st);
+    const sc = new AbortController();
+    signal.addEventListener('abort', () => sc.abort());
+    let timedOut = null;
+    const stop = (why) => { timedOut = why; sc.abort(); };
+    let stallT = setTimeout(() => stop('stall'), STALL_MS);
+    const totalT = setTimeout(() => stop('total'), TOTAL_MS);
     try {
       const params = { concept, city };
       if (brief) params.brief = brief;
-      const r = await fetch('/api/agent?' + new URLSearchParams(params), { signal });
+      const r = await fetch('/api/agent?' + new URLSearchParams(params), { signal: sc.signal });
       if (!r.body) throw new Error('Streaming is not supported in this browser.');
       const reader = r.body.getReader();
       const dec = new TextDecoder();
       let buf = '';
-      const line = (s) => { s = s.trim(); if (!s) return; try { handle(JSON.parse(s)); } catch { /* ignore bad line */ } };
+      const line = (s) => {
+        s = s.trim();
+        if (!s) return;
+        let ev;
+        try { ev = JSON.parse(s); } catch { return; /* ignore bad line */ }
+        handle(ev);
+      };
       for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
+        clearTimeout(stallT);
+        stallT = setTimeout(() => stop('stall'), STALL_MS);
         buf += dec.decode(value, { stream: true });
         let i;
         while ((i = buf.indexOf('\n')) >= 0) { line(buf.slice(0, i)); buf = buf.slice(i + 1); }
       }
       buf += dec.decode();
       line(buf);
+      if (my !== seq) { clearTimeout(stallT); clearTimeout(totalT); return; }
+      if (!st.errored && !st.gotPlaybook && !r.ok) st.errored = { message: 'Something went wrong (' + r.status + '). Please try again.' };
+    } catch (e) {
+      if (my !== seq) { clearTimeout(stallT); clearTimeout(totalT); return; }
+      if (timedOut) st.errored = { message: timedOut === 'stall' ? 'The agent stopped responding. Please try again.' : 'The agent took too long to finish. Please try again.' };
+      else if (e.name === 'AbortError') return;
+      else st.errored = { message: e.message === 'Failed to fetch' ? NET_MSG : e.message };
+    }
+    clearTimeout(stallT);
+    clearTimeout(totalT);
+    try {
+      await settle(st, my, concept, city, signal, t0);
+    } finally {
+      if (my === seq) setBusy(false);
+    }
+  }
+
+  // First load: replay a recorded agent run through the same handler. No API calls.
+  async function replayExample() {
+    last = { concept: 'Italian restaurant', city: 'Austin', brief: 'cozy date-night spot for young couples' };
+    $('concept').value = last.concept;
+    $('city').value = last.city;
+    $('brief').value = last.brief;
+    const my = begin(last.concept, last.city, last.brief);
+    const signal = ctl.signal;
+    const st = { market: null, gotPlaybook: false, errored: null };
+    try {
+      const r = await fetch('/examples/austin-italian.json', { signal });
+      if (!r.ok) throw new Error('example unavailable');
+      const ex = await r.json();
       if (my !== seq) return;
-      if (!errored && !gotPlaybook && !r.ok) errored = { message: 'Something went wrong (' + r.status + '). Please try again.' };
+      if (!ex || !Array.isArray(ex.events)) throw new Error('bad example');
+      last = { concept: ex.concept, city: ex.city, brief: ex.brief || '' };
+      $('concept').value = ex.concept;
+      $('city').value = ex.city;
+      $('brief').value = ex.brief || '';
+      $('live').textContent = 'Showing a recorded example run for ' + ex.concept + ' in ' + ex.city + '.';
+      const handle = makeHandler(my, st);
+      const total = Math.max(1, ...ex.events.map((e) => +e.ms || 0));
+      const scale = reduced ? 0 : 3000 / total;
+      const t0 = Date.now();
+      let failed = null;
+      for (const ev of ex.events) {
+        if (my !== seq) return;
+        const wait = scale ? (+ev.ms || 0) * scale - (Date.now() - t0) : 0;
+        if (wait > 0) await new Promise((res) => setTimeout(res, wait));
+        if (my !== seq) return;
+        try { handle(ev); } catch (e) { failed = e; break; }
+      }
+      if (failed) st.errored = { message: 'Could not display the example: ' + failed.message };
+      showExampleNote(ex);
+      setBusy(false);
+      await settle(st, my, ex.concept, ex.city, signal, t0, total);
     } catch (e) {
       if (my !== seq || e.name === 'AbortError') return;
-      errored = { message: e.message === 'Failed to fetch' ? 'Could not reach the server. Check your connection and try again.' : e.message };
+      setBusy(false);
+      showError('Could not load the example run. Use the search above to run the agent live.');
     }
-    if (my !== seq) return;
-    finishTrace(t0);
-    if (errored && !gotPlaybook) {
-      if (errored.code === 'budget') playbookNote('The AI agent is resting for today, but the map data still works. Explore the top spots below.', true);
-      else playbookNote(errored.message || 'The agent could not finish. The map data still works.', true);
-      if (!market) await fallbackAnalyze(concept, city, my, signal);
-    } else if (!gotPlaybook) {
-      playbookNote('The agent finished without a playbook. The map data still works.', true);
-      if (!market) await fallbackAnalyze(concept, city, my, signal);
-    }
-    if (my === seq) setBusy(false);
+  }
+
+  function showExampleNote(ex) {
+    const d = ex.recordedAt ? new Date(ex.recordedAt) : null;
+    const when = d && !isNaN(d) ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'earlier';
+    const n = $('example-note');
+    n.innerHTML = 'Example run · recorded ' + esc(when) + ' · <button type="button" class="linkbtn" id="run-live">Run it live</button>';
+    n.hidden = false;
+    $('run-live').addEventListener('click', () => run(ex.concept, ex.city, ex.brief || ''));
   }
 
   function qBadge(fromQloo) {
@@ -247,20 +344,23 @@
     let html = '';
     if (keys.length) {
       const max = Math.max(0.1, ...keys.map((k) => Math.abs(age[k])));
-      html += '<div class="dv" role="img" aria-label="Age skew, over or under average">' + keys.map((k) => {
+      html += '<p class="dvcap">Age affinity skew (Qloo), not a share of customers</p><div class="dv" role="img" aria-label="Age affinity skew: Qloo affinity above or below average for each age group, not a share of customers">' + keys.map((k) => {
         const v = age[k];
         const w = Math.min(50, (Math.abs(v) / max) * 50);
         return '<div class="dvrow"><span>' + AGE[k] + '</span><div class="dvtrack"><i class="' + (v >= 0 ? 'pos' : 'neg') + '" style="width:' + w + '%"></i></div></div>';
-      }).join('') + '</div><div class="dvaxis"><span>Fewer than average</span><span>More</span></div>';
+      }).join('') + '</div><div class="dvaxis"><span>Lower affinity</span><span>Higher</span></div>';
       const top = keys.filter((k) => age[k] > 0.05).sort((x, y) => age[y] - age[x]).slice(0, 2).map((k) => AGE[k].toLowerCase());
       const f = gen.female || 0;
-      const gtxt = Math.abs(f) < 0.05 ? 'an even gender mix' : (f > 0 ? 'women more than average' : 'men more than average');
-      html += '<p class="plain">' + (top.length ? 'Your crowd over-indexes at <b>' + esc(top.join(' and ')) + '</b> and skews toward <b>' + gtxt + '</b>.' : 'Your crowd has <b>' + gtxt + '</b>.') + '</p>';
+      const gtxt = Math.abs(f) < 0.05 ? 'a balanced gender mix' : (f > 0 ? 'a female lean' : 'a male lean');
+      html += '<p class="plain">' + (top.length ? 'Qloo affinity for this concept is highest among <b>' + esc(top.join(' and ')) + '</b>, with <b>' + gtxt + '</b>.' : 'Qloo affinity shows <b>' + gtxt + '</b>.') + '</p>';
     }
-    if (typeof gen.female === 'number' && typeof gen.male === 'number') {
-      const fp = Math.round(50 + (gen.female - gen.male) * 25);
-      const f = Math.min(80, Math.max(20, fp));
-      html += '<div class="gender" role="img" aria-label="Gender skew: ' + f + ' percent women-leaning, ' + (100 - f) + ' percent men-leaning"><span class="g-f" style="width:' + f + '%">Women</span><span class="g-m" style="width:' + (100 - f) + '%">Men</span></div>';
+    if (typeof gen.female === 'number') {
+      const f = gen.female;
+      let gl;
+      if (Math.abs(f) < 0.05) gl = 'Balanced';
+      else if (f > 0) gl = 'Leans female (' + fmtSigned(f, 2) + ' affinity)';
+      else gl = 'Leans male (' + fmtSigned(typeof gen.male === 'number' ? gen.male : -f, 2) + ' affinity)';
+      html += '<p class="gender-line"><b>Gender:</b> ' + esc(gl) + '</p>';
     }
     $('audience').innerHTML = html || '<p class="hint">No audience data for this search.</p>';
   }
@@ -278,15 +378,16 @@
     drawMap(d);
     const zones = d.zones || [];
     $('empty').hidden = zones.length > 0;
+    $('lowsignal').hidden = !(d.lowSignal && zones.length);
     const maxLift = Math.max(0.0001, ...zones.map((z) => z.lift));
     $('zones').innerHTML = zones.map((z) => {
       const n = z.competitorsWithin1km;
-      const badge = n === 0 ? '<span class="badge">Open field: 0 competitors within 1 km</span>' : '<span class="badge busy">' + n + ' competitor' + (n === 1 ? '' : 's') + ' within 1 km</span>';
+      const badge = typeof n !== 'number' ? '' : n === 0 ? '<span class="badge">No sampled competitors within 1 km</span>' : '<span class="badge busy">' + n + ' sampled competitor' + (n === 1 ? '' : 's') + ' within 1 km</span>';
       const lm = z.landmark || {};
       return '<li><button type="button" class="zone" data-rank="' + z.rank + '" aria-label="Zone ' + z.rank + ', near ' + esc(lm.name || 'this spot') + '. Fly to zone on map">' +
         '<span class="num" aria-hidden="true">' + z.rank + '</span><span><div class="zname">Near ' + esc(lm.name || 'this spot') + '</div>' +
         '<div class="zsub">' + esc(street(lm.address, d.city)) + '</div>' + badge +
-        '<div class="liftrow"><span>Taste lift</span><span class="bar"><i style="width:' + Math.round((z.lift / maxLift) * 100) + '%"></i></span><span>+' + Math.round(z.lift * 100) + '</span></div></span></button></li>';
+        '<div class="liftrow" title="Taste lift: Qloo affinity above what the area\'s general popularity predicts. A scouting signal, not a guarantee."><span>Taste lift</span><span class="bar"><i style="width:' + Math.round((z.lift / maxLift) * 100) + '%"></i></span><span>' + fmtSigned(z.lift * 100, 0) + '</span></div></span></button></li>';
     }).join('');
     document.querySelectorAll('.zone').forEach((el) => el.addEventListener('click', () => {
       const z = zones.find((q) => q.rank === +el.dataset.rank);
@@ -295,7 +396,7 @@
     renderAudience(d.audience || {});
     renderLove(d.audience || {});
     const comps = d.competitors || [];
-    $('comp-sum').textContent = comps.length + ' existing ' + d.concept + ' place' + (comps.length === 1 ? '' : 's') + ' mapped';
+    $('comp-sum').textContent = 'Top ' + comps.length + ' matching place' + (comps.length === 1 ? '' : 's') + ' (sample)';
     $('comp-list').innerHTML = comps.map((c) => '<li>' + esc(c.name) + '<small>' + esc(c.address || '') + '</small></li>').join('');
     $('live').textContent = zones.length ? 'Found ' + zones.length + ' top spots for ' + d.concept + ' in ' + d.city + '.' : 'No standout zones found.';
     $('results').scrollTop = 0;
@@ -321,6 +422,5 @@
     submit();
   }));
 
-  $('brief').value = 'cozy date-night spot for young couples';
-  run('Italian restaurant', 'Austin', $('brief').value);
+  replayExample();
 })();

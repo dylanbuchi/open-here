@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Open Here: find where your business has hidden demand</title>
-<meta name="description" content="Open Here uses Qloo taste data to show where people already crave your concept but nobody serves them yet. Pick a concept and a city, get the top 5 spots.">
+<meta name="description" content="Open Here uses Qloo taste data to show where Qloo taste affinity runs above what local popularity predicts. Pick a concept and a city, get top spots to scout.">
 <meta name="theme-color" content="#f4ecdc">
 <meta property="og:title" content="Open Here: find where your business has hidden demand">
 <meta property="og:description" content="Taste-lift maps for restaurants, cafes and shops, powered by Qloo.">
@@ -56,9 +56,9 @@
     <div class="mapwrap">
       <div id="map" role="application" aria-label="Map of recommended spots"></div>
       <div class="legend" aria-hidden="true">
-        <span><i class="lg-heat"></i>Taste lift (hidden demand)</span>
+        <span><i class="lg-heat"></i>Taste lift (scouting signal)</span>
         <span><i class="lg-zone"></i>Top spots</span>
-        <span><i class="lg-comp"></i>Existing places</span>
+        <span><i class="lg-comp"></i>Matching places (sample)</span>
       </div>
       <div id="maploading" class="maploading" hidden><div class="spinner"></div><p>Reading the city's taste…</p></div>
     </div>
@@ -66,6 +66,7 @@
     <aside class="panel" id="results" tabindex="-1" aria-label="Results">
       <div id="live" class="sr" aria-live="polite"></div>
       <div id="status" aria-live="polite"></div>
+      <p id="example-note" class="example-note" hidden></p>
       <details id="agent" class="agent" hidden>
         <summary id="agent-sum"><span class="dot" aria-hidden="true"></span><span id="agent-title">Agent at work</span></summary>
         <ol id="agent-steps" class="steps" aria-live="polite"></ol>
@@ -76,10 +77,11 @@
       </section>
       <div id="content" hidden>
         <h2 id="headline" class="headline"></h2>
-        <p class="lift-line"><strong>Taste lift</strong> = where people's love for this concept runs higher than the area's general popularity predicts. Hidden demand, not just busy downtown.</p>
+        <p class="lift-line"><strong>Taste lift</strong>: Qloo affinity above what the area's general popularity predicts. A scouting signal, not a guarantee.</p>
 
         <section aria-labelledby="h-zones">
-          <h3 id="h-zones" class="sec">Top 5 places to open</h3>
+          <h3 id="h-zones" class="sec">Top places to open</h3>
+          <p id="lowsignal" class="lowsignal" hidden>Demand looks evenly spread across this city, so treat these spots as weak signals.</p>
           <div id="empty" class="empty" hidden>No standout zones found for this search. Try a broader concept or a bigger city.</div>
           <ol id="zones" class="zones"></ol>
         </section>
@@ -96,7 +98,7 @@
         </section>
 
         <section aria-labelledby="h-comp">
-          <h3 id="h-comp" class="sec">Competitors nearby</h3>
+          <h3 id="h-comp" class="sec">Nearby competitors (sample)</h3>
           <details id="comp"><summary id="comp-sum"></summary><ul id="comp-list" class="comp-list"></ul></details>
         </section>
       </div>
@@ -105,7 +107,7 @@
         <p><strong>Powered by Qloo taste data.</strong></p>
         <details>
           <summary>How it works</summary>
-          <p>Qloo scores how strongly people in each part of the city are drawn to your concept (affinity) and how busy the area is overall (popularity). Taste lift is the gap: high affinity with low general buzz means demand that nobody is serving yet. We rank the strongest, well-spread zones and count the competitors already within 1 km.</p>
+          <p>Qloo scores how strongly people in each part of the city are drawn to your concept (affinity) and how popular places in the area are overall (popularity). Taste lift is the gap: affinity above what popularity predicts. It is a scouting signal, not a guarantee of demand. We rank the strongest, well-spread zones and count the matching places from a sample of the most popular ones within 1 km. Audience charts show Qloo affinity skew, not shares of customers.</p>
         </details>
       </footer>
     </aside>

@@ -44,6 +44,21 @@ concept + city + brief
   submit_playbook  ──►  validated server-side, names checked against Qloo results by domain
 ```
 
+**How we call Qloo.** The server calls Qloo's REST API directly (`/v2/tags`, `/v2/insights`, `/search`) with the event-issued key, which stays in server environment variables and never reaches the browser. We didn't use the `@qloo/qloo-harness` CLI or MCP package, because the agent needed fine control over heatmaps, demographics and location signals. Results are cached for 30 minutes, at most 4 calls run at once, and 429 or 5xx responses get a short bounded retry.
+
+### Request to result: Italian date night in Austin
+
+What one search actually asks Qloo, step by step (key redacted, values from the bundled example):
+
+1. **Match the concept to a place category.** `GET /v2/tags?filter.query=Italian restaurant` returns several tags. We keep only place-type tags and pick `urn:tag:category:place:italian_restaurant`, because it matches the head noun with no extra words.
+2. **Find the competitors.** `GET /v2/insights?filter.type=urn:entity:place&filter.tags=urn:tag:category:place:italian_restaurant&filter.location.query=Austin&take=50` returns the most popular matching places. Qloo resolves the city as "Austin, Travis County, Texas", and after dropping wrong-kind places and those outside the city cluster, 43 remain.
+3. **Map the taste.** `GET /v2/insights?filter.type=urn:heatmap&output.heatmap.boundary=urn:geohash&filter.location.query=Austin&signal.interests.entities=<top 3 competitors>` returns geohash cells with affinity and popularity. We fit affinity against popularity and rank areas by how far affinity beats the prediction (taste lift).
+4. **Name and vet each zone.** For each candidate zone, `GET /v2/insights?filter.type=urn:entity:place&filter.location=POINT(lon lat)&filter.location.radius=700` lists nearby places. Their Qloo categories decide whether the zone has a real commercial street, which nearby café or restaurant names it ("Radio Coffee & Beer"), and its neighborhood ("South Lamar"). Zones near airports are dropped.
+5. **Profile the audience.** `filter.type=urn:demographics` gives age and gender affinity. `urn:entity:artist`, `urn:entity:movie` and `urn:entity:brand` with `signal.location.query=Austin` (or a zone's `signal.location` point) give cross-domain taste.
+6. **Agent and playbook.** The agent sees a summary of steps 1 to 5, asks for more zone or audience taste if it needs it, flags surprising results, and submits a playbook. Each playlist name is checked against the artists Qloo returned, and each partner against the brands.
+
+Result: South Lamar, taste lift +15, none of the top 43 competitors within 1 km, with a playlist and partners drawn from what Qloo says this crowd loves.
+
 **Taste lift.** Qloo's raw heatmap tracks overall popularity closely (we measured r ≈ 0.95 in Austin), so a raw map mostly says "downtown is busy." Open Here fits affinity against popularity across the city and ranks areas by the residual: where people are more drawn to *this* concept than the area's general popularity predicts. It's a scouting signal, not a guarantee.
 
 **Grounding.** Playlist names are only marked "✓ Qloo" if Qloo returned them as artists, and partner names only if Qloo returned them as brands. Anything else is shown as "AI suggestion."

@@ -26,6 +26,13 @@
         <p class="tag">Find where your business has hidden demand.</p>
       </div>
     </div>
+    <div class="chips" aria-label="Try an example">
+      <span class="chips-label">Try:</span>
+      <button type="button" class="chip" data-slug="austin-italian" data-concept="Italian restaurant" data-city="Austin" data-brief="cozy date-night spot for young couples">Italian restaurant · Austin</button>
+      <button type="button" class="chip" data-slug="brooklyn-wine" data-concept="Wine bar" data-city="Brooklyn" data-brief="natural wine bar with small plates for creative locals">Wine bar · Brooklyn</button>
+      <button type="button" class="chip" data-slug="chicago-taqueria" data-concept="Taqueria" data-city="Chicago" data-brief="late-night tacos for students and shift workers">Taqueria · Chicago</button>
+      <button type="button" class="chip" data-slug="la-ramen" data-concept="Ramen" data-city="Los Angeles" data-brief="quick, soulful ramen for the after-work crowd">Ramen · Los Angeles</button>
+    </div>
     <form id="search" class="search" novalidate>
       <div class="field">
         <label for="concept">Concept</label>
@@ -56,20 +63,13 @@
       <option value="Austin"><option value="New York City"><option value="Los Angeles"><option value="Chicago">
       <option value="London"><option value="Paris"><option value="Berlin"><option value="Zurich"><option value="Geneva">
     </datalist>
-    <div class="chips" aria-label="Try an example">
-      <span class="chips-label">Try:</span>
-      <button type="button" class="chip" data-concept="Italian restaurant" data-city="Austin" data-brief="cozy date-night spot for young couples">Italian restaurant · Austin</button>
-      <button type="button" class="chip" data-concept="Coffee shop" data-city="Zurich" data-brief="specialty coffee for remote workers">Coffee shop · Zurich</button>
-      <button type="button" class="chip" data-concept="Taqueria" data-city="Chicago" data-brief="late-night tacos for students and shift workers">Taqueria · Chicago</button>
-      <button type="button" class="chip" data-concept="Ramen" data-city="Los Angeles" data-brief="quick, soulful ramen for the after-work crowd">Ramen · Los Angeles</button>
-    </div>
   </header>
 
   <main class="main">
     <div class="mapwrap">
       <div id="map" role="application" aria-label="Map of recommended spots"></div>
       <div class="legend" aria-hidden="true">
-        <span><i class="lg-heat"></i>Taste lift (scouting signal)</span>
+        <span title="Taste lift: how much more this crowd is drawn here than the area's general popularity predicts (in points)."><i class="lg-heat"></i>Taste lift (points)</span>
         <span><i class="lg-zone"></i>Top spots</span>
         <span><i class="lg-comp"></i>Popular competitors</span>
       </div>
@@ -91,7 +91,8 @@
       </section>
       <div id="content" hidden>
         <h2 id="headline" class="headline"></h2>
-        <p class="lift-line"><strong>Taste lift</strong>: Qloo affinity above what the area's general popularity predicts. A scouting signal, not a guarantee.</p>
+        <p id="place" class="place" hidden></p>
+        <p class="lift-line"><strong>Taste lift</strong>: how much more this crowd is drawn here than the area's general popularity predicts (in points). A scouting signal, not a guarantee.</p>
 
         <section aria-labelledby="h-zones">
           <h3 id="h-zones" class="sec">Top places to open</h3>

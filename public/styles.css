@@ -215,3 +215,7 @@ details summary{cursor:pointer;font-weight:600;padding:4px 0}
 @media (min-width:900px){
   .panel.wide{width:min(760px,62vw)}
 }
+
+.place{margin:0 0 10px;font-size:14px;color:var(--ink)}
+.place-hint{display:block;margin-top:2px;font-size:12.5px;color:var(--ink-2)}
+.cmp-sum{margin:12px 0 0;font-size:13.5px;font-weight:400;color:var(--ink-2)}

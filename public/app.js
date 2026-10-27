@@ -17,6 +17,14 @@
   let isExample = false;
   let curPlaybook = null;
   let cmpCtl = null;
+  let exSlug = null;
+  const lp = (lift) => fmtSigned((+lift || 0) * 100, 0);
+  const isPhone = () => matchMedia('(max-width:899px)').matches;
+  function toAgent() {
+    if (!isPhone()) return;
+    const el = $('agent');
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+  }
 
   function street(address, city) {
     if (!address) return '';
@@ -166,8 +174,10 @@
     brief = (brief || '').trim().slice(0, 240);
     last = { concept, city, brief };
     isExample = false;
+    exSlug = null;
     const t0 = Date.now();
     const my = begin(concept, city, brief);
+    toAgent();
     const signal = ctl.signal;
     const st = { market: null, gotPlaybook: false, errored: null };
     const handle = makeHandler(my, st);
@@ -221,17 +231,20 @@
   }
 
   // First load: replay a recorded agent run through the same handler. No API calls.
-  async function replayExample() {
+  async function replayExample(slug, fb, scroll) {
+    slug = slug || 'austin-italian';
     isExample = true;
-    last = { concept: 'Italian restaurant', city: 'Austin', brief: 'cozy date-night spot for young couples' };
+    exSlug = slug;
+    last = fb || { concept: 'Italian restaurant', city: 'Austin', brief: 'cozy date-night spot for young couples' };
     $('concept').value = last.concept;
     $('city').value = last.city;
     $('brief').value = last.brief;
     const my = begin(last.concept, last.city, last.brief);
+    if (scroll) toAgent();
     const signal = ctl.signal;
     const st = { market: null, gotPlaybook: false, errored: null };
     try {
-      const r = await fetch('/examples/austin-italian.json', { signal });
+      const r = await fetch('/examples/' + encodeURIComponent(slug) + '.json', { signal });
       if (!r.ok) throw new Error('example unavailable');
       const ex = await r.json();
       if (my !== seq) return;
@@ -259,6 +272,7 @@
       await settle(st, my, ex.concept, ex.city, signal, t0, total);
     } catch (e) {
       if (my !== seq || e.name === 'AbortError') return;
+      if (fb) { exSlug = null; run(fb.concept, fb.city, fb.brief); return; } // recording missing: run live
       setBusy(false);
       showError('Could not load the example run. Use the search above to run the agent live.');
     }
@@ -347,7 +361,7 @@
     try {
       let result;
       if (isExample) {
-        const r = await fetch('/examples/austin-italian-baseline.json', { signal });
+        const r = await fetch('/examples/' + encodeURIComponent(exSlug || 'austin-italian') + '-baseline.json', { signal });
         if (!r.ok) throw new Error('Could not load the recorded comparison.');
         const ex = await r.json();
         result = ex && ex.result;
@@ -381,38 +395,36 @@
 
   function renderCompare(b, p, example) {
     p = p || {};
-    const lp = p.playlist || [], pp = p.partners || [];
-    const rTotal = lp.length + pp.length;
-    const rMatch = lp.concat(pp).filter((x) => x && x.fromQloo).length;
+    const pl = p.playlist || [], pp = p.partners || [];
     const sc = b.score || {};
     const lMatch = +sc.matched || 0, lTotal = +sc.total || 0;
     const bz = p.bestZone;
     const sect = (t, body) => body ? '<h5 class="pb-sub">' + t + '</h5>' + body : '';
     const chips = (html) => html ? '<ul class="pchips">' + html + '</ul>' : '';
     const html = '<section class="cmp" aria-labelledby="cmp-h">' +
-      '<h3 id="cmp-h" class="sec">Without Qloo</h3>' +
-      '<p class="cmp-sum"><span class="cmp-l">Plain AI: <b>' + lMatch + ' of ' + lTotal + '</b> picks appear in Qloo\'s top results for this crowd.</span> <span class="cmp-r">Open Here: <b>' + rMatch + ' of ' + rTotal + '</b> verified.</span></p>' +
+      '<h3 id="cmp-h" class="sec">What Qloo knows that a plain AI doesn\'t</h3>' +
       '<div class="cmp-cols">' +
       '<div class="cmp-col plain"><h4 class="cmp-title">Plain AI · no Qloo data</h4>' +
         sect('Neighborhood', b.neighborhood ? '<p>' + esc(b.neighborhood) + '</p>' : '') +
-        sect('Why here', b.whyHere ? '<p>' + esc(b.whyHere) + '</p>' : '') +
-        sect('Target customer', b.targetCustomer ? '<p>' + esc(b.targetCustomer) + '</p>' : '') +
         sect('Playlist', chips(cmpChips(b.playlist))) +
         sect('Partners', chips(cmpChips(b.partners))) +
+        sect('Why here', b.whyHere ? '<p>' + esc(b.whyHere) + '</p>' : '') +
+        sect('Target customer', b.targetCustomer ? '<p>' + esc(b.targetCustomer) + '</p>' : '') +
       '</div>' +
       '<div class="cmp-col qloo"><h4 class="cmp-title">Open Here · Qloo-grounded</h4>' +
-        sect('Best zone', bz ? '<p>#' + esc(bz.rank) + ' near ' + esc(bz.near) + '</p>' : '') +
+        sect('Neighborhood', bz ? '<p>#' + esc(bz.rank) + ' near ' + esc(bz.near) + '</p>' : '') +
+        sect('Playlist', chips(chipList(pl))) +
+        sect('Partners', chips(chipList(pp))) +
         sect('Why here', (p.whyHere && p.whyHere.length) ? '<ul class="why">' + p.whyHere.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') +
         sect('Target customer', p.targetCustomer ? '<p>' + esc(p.targetCustomer) + '</p>' : '') +
-        sect('Playlist', chips(chipList(lp))) +
-        sect('Partners', chips(chipList(pp))) +
       '</div></div>' +
-      '<p class="cmp-cap">Same model, same brief. The only difference is access to Qloo\'s taste data. "Not in Qloo\'s top results" doesn\'t mean wrong, just not supported by measured taste for this audience.' + (example ? ' Recorded example, no live call.' : '') + '</p>' +
+      (lTotal ? '<p class="cmp-sum">' + lMatch + ' of ' + lTotal + ' plain-AI picks show up in Qloo\'s measured taste for this crowd.</p>' : '') +
+      '<p class="cmp-cap">Same model, same brief. Only one had Qloo\'s taste data. Plain-AI picks can still be good; they\'re just not backed by measured taste for this audience.' + (example ? ' Recorded example, no live call.' : '') + '</p>' +
       '</section>';
     $('compare').innerHTML = html;
     $('results').classList.add('wide');
     setTimeout(() => map.invalidateSize(), 50);
-    $('live').textContent = 'Plain AI: ' + lMatch + ' of ' + lTotal + " picks appear in Qloo's top results for this crowd. Open Here: " + rMatch + ' of ' + rTotal + ' verified.';
+    $('live').textContent = 'Comparison ready.' + (lTotal ? ' ' + lMatch + ' of ' + lTotal + " plain-AI picks show up in Qloo's measured taste for this crowd." : '');
     const sec = $('compare').querySelector('.cmp');
     if (sec && sec.scrollIntoView) sec.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
   }
@@ -474,7 +486,7 @@
     (d.zones || []).forEach((z) => {
       const icon = L.divIcon({ className: 'zone-icon', html: '<div class="zpin">' + z.rank + '</div>', iconSize: [38, 38], iconAnchor: [19, 19] });
       const m = L.marker([z.lat, z.lon], { icon, zIndexOffset: 1000, title: 'Zone ' + z.rank + ': near ' + (z.landmark ? z.landmark.name : '') })
-        .bindPopup('<b>#' + z.rank + ' Near ' + esc(z.landmark ? z.landmark.name : 'this spot') + '</b><br>' + esc(z.landmark ? z.landmark.address : '')).addTo(layers);
+        .bindPopup('<b>#' + z.rank + ' Near ' + esc(z.landmark ? z.landmark.name : 'this spot') + '</b><br>' + esc(z.landmark ? z.landmark.address : '') + '<br><span title="Taste lift: how much more this crowd is drawn here than the area\'s general popularity predicts (in points).">Taste lift ' + lp(z.lift) + ' pts</span>').addTo(layers);
       m.on('click', () => highlight(z.rank));
       zoneMarkers[z.rank] = m;
       pts.push([z.lat, z.lon]);
@@ -528,6 +540,9 @@
     $('maploading').hidden = true;
     $('content').hidden = false;
     $('headline').textContent = 'Top spots for ' + d.concept + ' in ' + d.city;
+    const pl = $('place');
+    if (d.place) pl.innerHTML = 'Qloo matched: <b>' + esc(d.place) + '</b> <span class="place-hint">Wrong place? Add the state or country, e.g. \'Springfield, Illinois\'.</span>';
+    pl.hidden = !d.place;
     drawMap(d);
     const zones = d.zones || [];
     $('empty').hidden = zones.length > 0;
@@ -542,7 +557,7 @@
       return '<li><button type="button" class="zone" data-rank="' + z.rank + '" aria-label="Zone ' + z.rank + ', near ' + esc(lm.name || 'this spot') + '. Fly to zone on map">' +
         '<span class="num" aria-hidden="true">' + z.rank + '</span><span><div class="zname">Near ' + esc(lm.name || 'this spot') + '</div>' +
         '<div class="zsub">' + esc(street(lm.address, d.city)) + '</div>' + badge +
-        '<div class="liftrow" title="Taste lift: Qloo affinity above what the area\'s general popularity predicts. A scouting signal, not a guarantee."><span>Taste lift</span><span class="bar"><i style="width:' + Math.round((z.lift / maxLift) * 100) + '%"></i></span><span>' + fmtSigned(z.lift * 100, 0) + '</span></div></span></button></li>';
+        '<div class="liftrow" title="Taste lift: how much more this crowd is drawn here than the area\'s general popularity predicts (in points)."><span>Taste lift</span><span class="bar"><i style="width:' + Math.round((z.lift / maxLift) * 100) + '%"></i></span><span>' + lp(z.lift) + ' pts</span></div></span></button></li>';
     }).join('');
     document.querySelectorAll('.zone').forEach((el) => el.addEventListener('click', () => {
       const z = zones.find((q) => q.rank === +el.dataset.rank);
@@ -572,11 +587,15 @@
 
   $('search').addEventListener('submit', (e) => { e.preventDefault(); submit(); });
   document.querySelectorAll('.chip').forEach((b) => b.addEventListener('click', () => {
+    if (b.dataset.slug) {
+      replayExample(b.dataset.slug, { concept: b.dataset.concept, city: b.dataset.city, brief: b.dataset.brief || '' }, true);
+      return;
+    }
     $('concept').value = b.dataset.concept;
     $('city').value = b.dataset.city;
     $('brief').value = b.dataset.brief || '';
     submit();
   }));
 
-  replayExample();
+  replayExample('austin-italian');
 })();

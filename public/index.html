@@ -37,14 +37,18 @@
         <input id="city" name="city" type="text" autocomplete="off" placeholder="Austin" aria-describedby="city-err" value="Austin">
         <span class="err" id="city-err" role="alert"></span>
       </div>
+      <div class="field brief">
+        <label for="brief">What's your angle? <span class="opt">optional</span></label>
+        <input id="brief" name="brief" type="text" autocomplete="off" maxlength="240" placeholder="cozy date-night spot for young couples">
+      </div>
       <button type="submit" id="go" class="btn">Find my spot</button>
     </form>
     <div class="chips" aria-label="Try an example">
       <span class="chips-label">Try:</span>
-      <button type="button" class="chip" data-concept="Italian restaurant" data-city="Austin">Italian restaurant · Austin</button>
-      <button type="button" class="chip" data-concept="Coffee shop" data-city="Zurich">Coffee shop · Zurich</button>
-      <button type="button" class="chip" data-concept="Taqueria" data-city="Chicago">Taqueria · Chicago</button>
-      <button type="button" class="chip" data-concept="Ramen" data-city="Los Angeles">Ramen · Los Angeles</button>
+      <button type="button" class="chip" data-concept="Italian restaurant" data-city="Austin" data-brief="cozy date-night spot for young couples">Italian restaurant · Austin</button>
+      <button type="button" class="chip" data-concept="Coffee shop" data-city="Zurich" data-brief="specialty coffee for remote workers">Coffee shop · Zurich</button>
+      <button type="button" class="chip" data-concept="Taqueria" data-city="Chicago" data-brief="late-night tacos for students and shift workers">Taqueria · Chicago</button>
+      <button type="button" class="chip" data-concept="Ramen" data-city="Los Angeles" data-brief="quick, soulful ramen for the after-work crowd">Ramen · Los Angeles</button>
     </div>
   </header>
 
@@ -62,6 +66,14 @@
     <aside class="panel" id="results" tabindex="-1" aria-label="Results">
       <div id="live" class="sr" aria-live="polite"></div>
       <div id="status" aria-live="polite"></div>
+      <details id="agent" class="agent" hidden>
+        <summary id="agent-sum"><span class="dot" aria-hidden="true"></span><span id="agent-title">Agent at work</span></summary>
+        <ol id="agent-steps" class="steps" aria-live="polite"></ol>
+      </details>
+      <section id="playbook" class="playbook" aria-labelledby="h-play" hidden>
+        <h3 id="h-play" class="sec">Launch playbook</h3>
+        <div class="playbook-body"></div>
+      </section>
       <div id="content" hidden>
         <h2 id="headline" class="headline"></h2>
         <p class="lift-line"><strong>Taste lift</strong> = where people's love for this concept runs higher than the area's general popularity predicts. Hidden demand, not just busy downtown.</p>
@@ -81,11 +93,6 @@
           <h3 id="h-love" class="sec">What they love</h3>
           <p class="hint">Cross-domain taste from Qloo. Use these for your playlist, decor and partnerships.</p>
           <div id="love"></div>
-        </section>
-
-        <section id="playbook" aria-labelledby="h-play">
-          <h3 id="h-play" class="sec">Launch playbook</h3>
-          <div class="playbook-body"><p>AI playbook coming soon</p></div>
         </section>
 
         <section aria-labelledby="h-comp">

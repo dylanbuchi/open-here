@@ -28,39 +28,181 @@
     $('go').textContent = b ? 'Reading…' : 'Find my spot';
   }
 
+  let ctl = null;
+  let market = null;
+
   function showError(msg) {
     $('content').hidden = true;
     $('status').innerHTML = '<div class="errbox"><p>' + esc(msg) + '</p><button class="btn" id="retry" type="button">Try again</button></div>';
-    $('retry').addEventListener('click', () => last && run(last.concept, last.city));
+    $('retry').addEventListener('click', () => last && run(last.concept, last.city, last.brief));
     $('live').textContent = 'Error: ' + msg;
   }
 
-  function showSkeleton() {
+  function resetResults() {
+    market = null;
     $('content').hidden = true;
-    $('status').innerHTML = '<div class="skel"><p>Reading the city\'s taste…</p><div class="h"></div><div></div><div></div><div></div></div>';
+    $('status').innerHTML = '';
+    $('agent-steps').innerHTML = '';
+    $('agent').hidden = false;
+    $('agent').open = true;
+    $('agent').classList.remove('done');
+    $('agent-title').textContent = 'Agent at work';
+    const pb = $('playbook');
+    pb.hidden = false;
+    pb.querySelector('.playbook-body').innerHTML = '<div class="pskel" aria-hidden="true"><div class="h"></div><div></div><div class="s"></div></div><p class="hint pwait">The agent is drafting your playbook from Qloo taste data…</p>';
   }
 
-  async function run(concept, city) {
-    const my = ++seq;
-    last = { concept, city };
-    setBusy(true);
-    showSkeleton();
-    $('live').textContent = "Reading the city's taste…";
+  function addStep(label) {
+    const ol = $('agent-steps');
+    const prev = ol.querySelector('li.current');
+    if (prev) { prev.classList.remove('current'); prev.classList.add('ok'); }
+    const li = document.createElement('li');
+    li.className = 'current';
+    li.innerHTML = '<span class="mark" aria-hidden="true"></span><span>' + esc(label) + '</span>';
+    ol.appendChild(li);
+  }
+
+  function finishTrace(t0) {
+    const ol = $('agent-steps');
+    ol.querySelectorAll('li.current').forEach((li) => { li.classList.remove('current'); li.classList.add('ok'); });
+    const n = ol.children.length;
+    $('agent').classList.add('done');
+    $('agent-title').textContent = n ? 'Agent took ' + n + ' step' + (n === 1 ? '' : 's') + ' · ' + ((Date.now() - t0) / 1000).toFixed(1) + 's' : 'Agent finished';
+    $('agent').open = false;
+  }
+
+  function playbookNote(msg, soft) {
+    $('playbook').hidden = false;
+    $('playbook').querySelector('.playbook-body').innerHTML = '<div class="pnote' + (soft ? ' soft' : '') + '"><p>' + esc(msg) + '</p></div>';
+  }
+
+  async function fallbackAnalyze(concept, city, my, signal) {
     try {
-      const r = await fetch('/api/analyze?' + new URLSearchParams({ concept, city }));
+      const r = await fetch('/api/analyze?' + new URLSearchParams({ concept, city }), { signal });
       let data = null;
       try { data = await r.json(); } catch { /* non-JSON */ }
       if (my !== seq) return;
-      if (!r.ok || !data || data.error) {
-        throw new Error((data && data.error) || 'Something went wrong (' + r.status + '). Please try again.');
-      }
+      if (!r.ok || !data || data.error) throw new Error((data && data.error) || 'Something went wrong (' + r.status + '). Please try again.');
       render(data);
     } catch (e) {
-      if (my !== seq) return;
+      if (my !== seq || e.name === 'AbortError') return;
       showError(e.message === 'Failed to fetch' ? 'Could not reach the server. Check your connection and try again.' : e.message);
-    } finally {
-      if (my === seq) setBusy(false);
     }
+  }
+
+  async function run(concept, city, brief) {
+    if (ctl) ctl.abort();
+    ctl = new AbortController();
+    const signal = ctl.signal;
+    const my = ++seq;
+    brief = (brief || '').trim().slice(0, 240);
+    last = { concept, city, brief };
+    const t0 = Date.now();
+    setBusy(true);
+    resetResults();
+    $('live').textContent = 'The agent is analyzing ' + concept + ' in ' + city + '…';
+    let gotPlaybook = false;
+    let errored = null;
+    const handle = (ev) => {
+      if (my !== seq || !ev || typeof ev !== 'object') return;
+      if (ev.type === 'step') addStep(ev.label || 'Working…');
+      else if (ev.type === 'market' && ev.data) { market = ev.data; render(ev.data); }
+      else if (ev.type === 'playbook' && ev.data) { gotPlaybook = true; renderPlaybook(ev.data); }
+      else if (ev.type === 'error') errored = ev;
+    };
+    try {
+      const params = { concept, city };
+      if (brief) params.brief = brief;
+      const r = await fetch('/api/agent?' + new URLSearchParams(params), { signal });
+      if (!r.body) throw new Error('Streaming is not supported in this browser.');
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      const line = (s) => { s = s.trim(); if (!s) return; try { handle(JSON.parse(s)); } catch { /* ignore bad line */ } };
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) { line(buf.slice(0, i)); buf = buf.slice(i + 1); }
+      }
+      buf += dec.decode();
+      line(buf);
+      if (my !== seq) return;
+      if (!errored && !gotPlaybook && !r.ok) errored = { message: 'Something went wrong (' + r.status + '). Please try again.' };
+    } catch (e) {
+      if (my !== seq || e.name === 'AbortError') return;
+      errored = { message: e.message === 'Failed to fetch' ? 'Could not reach the server. Check your connection and try again.' : e.message };
+    }
+    if (my !== seq) return;
+    finishTrace(t0);
+    if (errored && !gotPlaybook) {
+      if (errored.code === 'budget') playbookNote('The AI agent is resting for today, but the map data still works. Explore the top spots below.', true);
+      else playbookNote(errored.message || 'The agent could not finish. The map data still works.', true);
+      if (!market) await fallbackAnalyze(concept, city, my, signal);
+    } else if (!gotPlaybook) {
+      playbookNote('The agent finished without a playbook. The map data still works.', true);
+      if (!market) await fallbackAnalyze(concept, city, my, signal);
+    }
+    if (my === seq) setBusy(false);
+  }
+
+  function qBadge(fromQloo) {
+    return fromQloo ? '<span class="qmark">Qloo</span>' : '<span class="aimark">AI suggestion</span>';
+  }
+
+  function chipList(arr) {
+    return (arr || []).map((x) => {
+      const q = !!(x && x.fromQloo);
+      const t = q ? "Verified in Qloo's taste data" : 'Suggested by the AI, not found in Qloo data';
+      return '<li class="pchip ' + (q ? 'q' : 'ai') + '" tabindex="0" title="' + esc(t) + '" aria-label="' + esc((x && x.name) + '. ' + t) + '"><span>' + esc(x && x.name) + '</span>' + qBadge(q) + '</li>';
+    }).join('');
+  }
+
+  function renderPlaybook(p) {
+    const bz = p.bestZone;
+    const list = (a) => (a || []).map((x) => '<li>' + esc(x) + '</li>').join('');
+    let html = '<h2 class="pb-head">' + esc(p.headline) + '</h2>';
+    if (bz) html += '<button type="button" class="best" id="best-btn" aria-label="Fly the map to the best spot, number ' + esc(bz.rank) + ' near ' + esc(bz.near) + '"><span class="num" aria-hidden="true">' + esc(bz.rank) + '</span><span><small>Best spot</small><b>#' + esc(bz.rank) + ' near ' + esc(bz.near) + '</b></span><span class="go" aria-hidden="true">Show on map &rarr;</span></button>';
+    if (p.whyHere && p.whyHere.length) html += '<h4 class="pb-sub">Why here</h4><ul class="why">' + list(p.whyHere) + '</ul>';
+    html += '<div class="pb-grid"><div><h4 class="pb-sub">Target customer</h4><p>' + esc(p.targetCustomer) + '</p></div><div><h4 class="pb-sub">Vibe</h4><p>' + esc(p.vibe) + '</p></div></div>';
+    if (p.offerIdeas && p.offerIdeas.length) html += '<h4 class="pb-sub">Offer ideas</h4><ul class="why">' + list(p.offerIdeas) + '</ul>';
+    if (p.playlist && p.playlist.length) html += '<h4 class="pb-sub">Playlist</h4><ul class="pchips">' + chipList(p.playlist) + '</ul>';
+    if (p.partners && p.partners.length) html += '<h4 class="pb-sub">Partners</h4><ul class="pchips">' + chipList(p.partners) + '</ul>';
+    html += '<p class="legend-note"><span class="qmark">Qloo</span> verified in Qloo\'s taste data &nbsp; <span class="aimark">AI suggestion</span> not in Qloo data</p>';
+    if (p.openingPitch) html += '<h4 class="pb-sub">Opening pitch</h4><blockquote class="pitch"><p id="pitch-text">' + esc(p.openingPitch) + '</p><button type="button" class="copy" id="copy-btn">Copy</button></blockquote>';
+    const body = $('playbook').querySelector('.playbook-body');
+    $('playbook').hidden = false;
+    body.innerHTML = html;
+    const bb = $('best-btn');
+    if (bb) bb.addEventListener('click', () => flyTo(bz.rank, bz.lat, bz.lon));
+    const cb = $('copy-btn');
+    if (cb) cb.addEventListener('click', async () => {
+      const text = p.openingPitch;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
+        else throw new Error('no clipboard');
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch { /* ignore */ }
+        ta.remove();
+      }
+      cb.textContent = 'Copied';
+      cb.classList.add('ok');
+      $('live').textContent = 'Opening pitch copied to clipboard.';
+      setTimeout(() => { cb.textContent = 'Copy'; cb.classList.remove('ok'); }, 2000);
+    });
+    $('live').textContent = 'Launch playbook ready: ' + p.headline;
+  }
+
+  function flyTo(rank, lat, lon) {
+    highlight(rank);
+    if (typeof lat !== 'number' || typeof lon !== 'number') return;
+    if (reduced) map.setView([lat, lon], 15); else map.flyTo([lat, lon], 15, { duration: 1.1 });
+    map.once('moveend', () => zoneMarkers[rank] && zoneMarkers[rank].openPopup());
+    if (matchMedia('(max-width:899px)').matches) $('map').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
   }
 
   function drawMap(d) {
@@ -93,6 +235,9 @@
 
   function highlight(rank) {
     document.querySelectorAll('.zone').forEach((el) => el.classList.toggle('active', +el.dataset.rank === rank));
+    zoneMarkers.forEach((m, i) => { const el = m && m.getElement && m.getElement(); if (el) el.classList.toggle('hl', i === rank); });
+    const card = document.querySelector('.zone[data-rank="' + rank + '"]');
+    if (card && card.scrollIntoView) card.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
   }
 
   function renderAudience(a) {
@@ -127,6 +272,7 @@
 
   function render(d) {
     $('status').innerHTML = '';
+    $('maploading').hidden = true;
     $('content').hidden = false;
     $('headline').textContent = 'Top spots for ' + d.concept + ' in ' + d.city;
     drawMap(d);
@@ -144,10 +290,7 @@
     }).join('');
     document.querySelectorAll('.zone').forEach((el) => el.addEventListener('click', () => {
       const z = zones.find((q) => q.rank === +el.dataset.rank);
-      highlight(z.rank);
-      if (reduced) map.setView([z.lat, z.lon], 15); else map.flyTo([z.lat, z.lon], 15, { duration: 1.1 });
-      map.once('moveend', () => zoneMarkers[z.rank] && zoneMarkers[z.rank].openPopup());
-      if (matchMedia('(max-width:899px)').matches) $('map').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
+      flyTo(z.rank, z.lat, z.lon);
     }));
     renderAudience(d.audience || {});
     renderLove(d.audience || {});
@@ -167,15 +310,17 @@
     $('city').setAttribute('aria-invalid', String(!city));
     if (!concept) return $('concept').focus();
     if (!city) return $('city').focus();
-    run(concept, city);
+    run(concept, city, $('brief').value);
   }
 
   $('search').addEventListener('submit', (e) => { e.preventDefault(); submit(); });
   document.querySelectorAll('.chip').forEach((b) => b.addEventListener('click', () => {
     $('concept').value = b.dataset.concept;
     $('city').value = b.dataset.city;
+    $('brief').value = b.dataset.brief || '';
     submit();
   }));
 
-  run('Italian restaurant', 'Austin');
+  $('brief').value = 'cozy date-night spot for young couples';
+  run('Italian restaurant', 'Austin', $('brief').value);
 })();

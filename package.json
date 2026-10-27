@@ -1,0 +1,12 @@
+{
+  "name": "open-here",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "node --env-file=.env dev-server.mjs",
+    "test": "node --test test/"
+  }
+}

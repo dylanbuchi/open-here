@@ -12,6 +12,15 @@
   }).addTo(map);
   let layers = L.layerGroup().addTo(map);
   let zoneMarkers = [];
+  // leaflet.heat only redraws once a zoom ends, so during flyTo the old
+  // drawing stretches across the map. Hide it while zooming, redraw on landing.
+  let heat = null;
+  map.on('zoomstart', () => { if (heat && heat._canvas) heat._canvas.style.opacity = '0'; });
+  map.on('zoomend moveend', () => {
+    if (!heat || !heat._canvas) return;
+    heat.redraw();
+    heat._canvas.style.opacity = '1';
+  });
   let seq = 0;
   let last = null;
   let isExample = false;
@@ -85,6 +94,14 @@
   function resetResults() {
     if (cmpCtl) cmpCtl.abort();
     clearAiPin();
+    // Clear the previous city's heatmap and pins right away, so they never
+    // linger while a new search loads or after a search fails.
+    map.closePopup();
+    layers.clearLayers();
+    heat = null;
+    zoneMarkers = [];
+    compMarkers = [];
+    activeComp = -1;
     curPlaybook = null;
     $('compare').innerHTML = '';
     $('results').classList.remove('wide');
@@ -326,7 +343,7 @@
   function chipList(arr) {
     return (arr || []).map((x) => {
       const q = !!(x && x.fromQloo);
-      const t = q ? "Verified in Qloo's taste data" : 'Suggested by the AI, not found in Qloo data';
+      const t = q ? 'Found in Qloo\'s data for this crowd' : 'Suggested by the AI, not found in Qloo\'s data';
       return '<li class="pchip ' + (q ? 'q' : 'ai') + '" tabindex="0" title="' + esc(t) + '" aria-label="' + esc((x && x.name) + '. ' + t) + '"><span>' + esc(x && x.name) + '</span>' + qBadge(q) + '</li>';
     }).join('');
   }
@@ -348,7 +365,7 @@
     if (p.offerIdeas && p.offerIdeas.length) html += '<h4 class="pb-sub">Offer ideas</h4><ul class="why">' + list(p.offerIdeas) + '</ul>';
     if (p.playlist && p.playlist.length) html += '<h4 class="pb-sub">Playlist</h4><ul class="pchips">' + chipList(p.playlist) + '</ul>';
     if (p.partners && p.partners.length) html += '<h4 class="pb-sub">Partners</h4><ul class="pchips">' + chipList(p.partners) + '</ul>';
-    html += '<p class="legend-note"><span class="qmark">Qloo</span> verified in Qloo\'s taste data &nbsp; <span class="aimark">AI suggestion</span> not in Qloo data</p>';
+    html += '<p class="legend-note"><span class="qmark">Qloo</span> found in Qloo\'s data &nbsp; <span class="aimark">AI suggestion</span> the AI\'s idea, not from Qloo</p>';
     if (p.openingPitch) html += '<h4 class="pb-sub">Opening pitch</h4><blockquote class="pitch"><p id="pitch-text">' + esc(p.openingPitch) + '</p><button type="button" class="copy" id="copy-btn">Copy</button></blockquote>';
     const body = $('playbook').querySelector('.playbook-body');
     $('playbook').hidden = false;
@@ -488,14 +505,14 @@
         sect('Why here', b.whyHere ? '<p>' + esc(b.whyHere) + '</p>' : '') +
         sect('Target customer', b.targetCustomer ? '<p>' + esc(b.targetCustomer) + '</p>' : '') +
       '</div>' +
-      '<div class="cmp-col qloo"><h4 class="cmp-title">Open Here · Qloo-grounded</h4>' +
+      '<div class="cmp-col qloo"><h4 class="cmp-title">Open Here · with Qloo</h4>' +
         sect('Neighborhood', bz ? (bz.neighborhood ? '<p>' + esc(bz.neighborhood) + (bz.near ? '<br><small class="cmp-near">near ' + esc(bz.near) + '</small>' : '') + '</p>' : '<p>#' + esc(bz.rank) + ' near ' + esc(bz.near) + '</p>') : '') +
         sect('Playlist', chips(chipList(pl))) +
         sect('Partners', chips(chipList(pp))) +
         sect('Why here', (p.whyHere && p.whyHere.length) ? '<ul class="why">' + p.whyHere.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') +
         sect('Target customer', p.targetCustomer ? '<p>' + esc(p.targetCustomer) + '</p>' : '') +
       '</div></div>' +
-      '<p class="cmp-cap">Same model, same brief. We measured both picks on the same Qloo taste map; only Open Here could see it.' + (example ? ' Recorded example, no live call.' : '') + '</p>' +
+      '<p class="cmp-cap">Same model, same brief. Both picks are scored on the same Qloo map, but only Open Here got to see that map before choosing.' + (example ? ' This is a recorded example.' : '') + '</p>' +
       '</section>';
     $('compare').innerHTML = html;
     $('results').classList.add('wide');
@@ -545,11 +562,13 @@
     layers = L.layerGroup().addTo(map);
     zoneMarkers = [];
     const pts = [];
+    heat = null;
     if (d.heatmap && d.heatmap.length) {
-      L.heatLayer(d.heatmap.map((p) => [p.lat, p.lon, p.intensity]), {
+      heat = L.heatLayer(d.heatmap.map((p) => [p.lat, p.lon, p.intensity]), {
         radius: 28, blur: 24, maxZoom: 14, minOpacity: 0.25,
         gradient: { 0.2: '#f6dc8f', 0.5: '#eaa23a', 0.8: '#d9532b', 1: '#8e2a14' }
       }).addTo(layers);
+      if (heat._canvas) heat._canvas.style.transition = reduced ? 'none' : 'opacity .2s';
     }
     compMarkers = [];
     activeComp = -1;
@@ -563,7 +582,7 @@
     (d.zones || []).forEach((z) => {
       const icon = L.divIcon({ className: 'zone-icon', html: '<div class="zpin">' + z.rank + '</div>', iconSize: [38, 38], iconAnchor: [19, 19] });
       const m = L.marker([z.lat, z.lon], { icon, zIndexOffset: 1000, title: 'Zone ' + z.rank + ': ' + placeName(z) })
-        .bindPopup('<b>#' + z.rank + ' ' + esc(placeName(z)) + '</b><br>' + (z.neighborhood && z.landmark && z.landmark.name ? esc('near ' + z.landmark.name) + '<br>' : '') + esc(z.landmark ? z.landmark.address : '') + '<br><span title="Taste lift: how much more this crowd is drawn here than the area\'s general popularity predicts (in points).">Taste lift ' + lp(z.lift) + ' pts</span>').addTo(layers);
+        .bindPopup('<b>#' + z.rank + ' ' + esc(placeName(z)) + '</b><br>' + (z.neighborhood && z.landmark && z.landmark.name ? esc('near ' + z.landmark.name) + '<br>' : '') + esc(z.landmark ? z.landmark.address : '') + '<br><span title="How much more people here like your kind of place than the area\'s overall popularity would suggest">Taste lift ' + lp(z.lift) + ' pts</span>').addTo(layers);
       m.on('click', () => highlight(z.rank));
       zoneMarkers[z.rank] = m;
       pts.push([z.lat, z.lon]);
@@ -586,15 +605,15 @@
     let html = '';
     if (keys.length) {
       const max = Math.max(0.1, ...keys.map((k) => Math.abs(age[k])));
-      html += '<p class="dvcap">Age affinity skew (Qloo), not a share of customers</p><div class="dv" role="img" aria-label="Age affinity skew: Qloo affinity above or below average for each age group, not a share of customers">' + keys.map((k) => {
+      html += '<p class="dvcap">How much each age group likes this kind of place, compared with average. Not the share of your customers.</p><div class="dv" role="img" aria-label="How much each age group likes this kind of place compared with average, according to Qloo. Not the share of customers.">' + keys.map((k) => {
         const v = age[k];
         const w = Math.min(50, (Math.abs(v) / max) * 50);
         return '<div class="dvrow"><span>' + AGE[k] + '</span><div class="dvtrack"><i class="' + (v >= 0 ? 'pos' : 'neg') + '" style="width:' + w + '%"></i></div></div>';
-      }).join('') + '</div><div class="dvaxis"><span>Lower affinity</span><span>Higher</span></div>';
+      }).join('') + '</div><div class="dvaxis"><span>Less than average</span><span>More</span></div>';
       const top = keys.filter((k) => age[k] > 0.05).sort((x, y) => age[y] - age[x]).slice(0, 2).map((k) => AGE[k].toLowerCase());
       const f = gen.female || 0;
-      const gtxt = Math.abs(f) < 0.05 ? 'a balanced gender mix' : (f > 0 ? 'a female lean' : 'a male lean');
-      html += '<p class="plain">' + (top.length ? 'Qloo affinity for this concept is highest among <b>' + esc(top.join(' and ')) + '</b>, with <b>' + gtxt + '</b>.' : 'Qloo affinity shows <b>' + gtxt + '</b>.') + '</p>';
+      const gtxt = Math.abs(f) < 0.05 ? 'men and women about equally' : (f > 0 ? 'women a bit more than men' : 'men a bit more than women');
+      html += '<p class="plain">' + (top.length ? 'People aged <b>' + esc(top.join(' and ')) + '</b> like this kind of place the most, ' + gtxt + '.' : 'It appeals to <b>' + gtxt + '</b>.') + '</p>';
     }
     if (typeof gen.female === 'number') {
       const f = gen.female;
@@ -650,7 +669,7 @@
       return '<li><button type="button" class="zone" data-rank="' + z.rank + '" aria-label="Zone ' + z.rank + ', ' + esc(placeName(z)) + (sub ? ', ' + esc(sub) : '') + '. Fly to zone on map">' +
         '<span class="num" aria-hidden="true">' + z.rank + '</span><span><div class="zname">' + esc(placeName(z)) + '</div>' +
         '<div class="zsub">' + esc(sub) + '</div>' + badge +
-        '<div class="liftrow" title="Taste lift: how much more this crowd is drawn here than the area\'s general popularity predicts (in points)."><span>Taste lift</span><span class="bar"><i style="width:' + Math.round((z.lift / maxLift) * 100) + '%"></i></span><span>' + lp(z.lift) + ' pts</span></div></span></button></li>';
+        '<div class="liftrow" title="How much more people here like your kind of place than the area\'s overall popularity would suggest"><span>Taste lift</span><span class="bar"><i style="width:' + Math.round((z.lift / maxLift) * 100) + '%"></i></span><span>' + lp(z.lift) + ' pts</span></div></span></button></li>';
     }).join('');
     document.querySelectorAll('.zone').forEach((el) => el.addEventListener('click', () => {
       const z = zones.find((q) => q.rank === +el.dataset.rank);

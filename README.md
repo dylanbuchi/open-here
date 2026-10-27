@@ -2,34 +2,34 @@
 
 **Find where your business idea has hidden demand.**
 
-Live app: **https://open-here.vercel.app** · Built for the [Qloo Agentic Hackathon](https://qloo.devpost.com/)
+Try it: **https://open-here.vercel.app** · Made for the [Qloo Agentic Hackathon](https://qloo.devpost.com/)
 
-Open Here is an AI location scout for people opening a local business. Give it a concept (say, an Italian restaurant), a city, and your angle ("cozy date-night spot for young couples"). An agent works through Qloo's taste data and returns:
+Tell Open Here what you want to open, where, and what you're going for, like "Italian restaurant, Austin, cozy date-night spot for young couples". An agent digs through Qloo's data while you watch and comes back with:
 
-- **A taste-lift map** showing where affinity for your concept beats what the area's general popularity predicts
-- **The top spots**, each named after a real nearby place, with how many of the city's most popular competitors sit within 1 km
-- **Who your customers are**: Qloo's age and gender affinity for the people who love places like yours
-- **What they love**: their music, films and brands, localized to the city
-- **A launch playbook**: best spot, vibe, offer ideas, playlist, partners and an opening pitch, with every playlist and partner name checked against Qloo's data
+- **A map of hidden demand:** areas where interest in your concept is higher than the area's general popularity would suggest
+- **The best spots by neighborhood**, each with a well-known place nearby and how many popular competitors are within 1 km
+- **Who your customers are:** the age groups and gender lean Qloo sees for people who like places like yours
+- **What they're into:** music, films and brands, for the city and for each spot
+- **A launch plan:** best spot, vibe, menu ideas, a playlist, partner brands and an opening pitch. Every artist and brand is checked against what Qloo actually returned.
 
-## Why Qloo is the difference
+## Why it needs Qloo
 
-Click **Compare with plain AI** on any playbook. The same model gets the same brief with no Qloo tools. Then Open Here puts the plain AI's neighborhood on the same Qloo taste map and measures it exactly like its own spots: taste lift, and how many of the city's most popular competitors sit within 1 km.
+Click **Compare with plain AI** under any plan. The same model gets the same brief, just without Qloo. Then Open Here puts the plain AI's neighborhood on the same map and scores it the same way it scores its own spots.
 
-In the bundled examples:
+From the examples on the site:
 
 | Example | Plain AI's pick | Open Here's pick |
 |---|---|---|
-| Italian date night, Austin | East Austin: taste lift −1 | South Lamar: +15 |
+| Italian date night, Austin | East Austin: −1 | South Lamar: +15 |
 | Ramen, Los Angeles | Little Tokyo: +2, with 8 popular competitors within 1 km | Los Feliz: +37 |
-| Wine bar, Brooklyn | Bushwick North: −7 (next to our #3 spot) | Williamsburg: +15 |
+| Wine bar, Brooklyn | Bushwick North: −7 (right next to my #3 spot) | Williamsburg: +15 |
 | Taqueria, Chicago | Pilsen: +15, a good pick | Armour Square: +20 |
 
-A plain AI can name a plausible neighborhood. It can't see where demand beats popularity, which competitors are already there, or who the audience is. Sometimes its instinct is good (Chicago), and the app says so.
+A plain AI can name a decent neighborhood. It can't see where demand outruns popularity, who's already competing there, or what that crowd likes. Sometimes its instinct is good, like Pilsen, and the app says so.
 
-## The agent double-checks Qloo
+## The agent double-checks itself
 
-Before it commits to a plan, the agent records 1 to 3 surprising Qloo results and what it did about them. For example: "Qloo's top artists in South Lamar are country acts, a mismatch for red-sauce romantic dining", so the playlist blends them in rather than leading with them. These checks appear in every playbook under "What the agent double-checked".
+Before it commits to a plan, the agent flags one to three results that look off and says what it did about each. In Austin it noticed the crowd's top artists are hard Texas country, which could clash with an Italian dining room, so it kept only the softer Americana names and blended them with Italian music. You'll find these under "What the agent double-checked" in every plan.
 
 ## How it works
 
@@ -37,47 +37,46 @@ Before it commits to a plan, the agent records 1 to 3 surprising Qloo results an
 concept + city + brief
         │
         ▼
-  Agent (LLM with tools)  ──►  analyze_market   Qloo tags, places, heatmap, demographics, cross-domain taste
-        │                  ──►  zone_taste       what fans of the places in one zone love (signalled by those places)
-        │                  ──►  audience_taste   the audience's taste in a domain, optionally by age band
+  Agent (LLM with tools)  ──►  analyze_market   Qloo tags, places, heatmap, demographics, taste
+        │                  ──►  zone_taste       what people who go to one spot's places are into
+        │                  ──►  audience_taste   the audience's taste, optionally for some age groups
         ▼
-  submit_playbook  ──►  validated server-side, names checked against Qloo results by domain
+  submit_playbook  ──►  checked on the server, names verified against what Qloo returned
 ```
 
-**How we call Qloo.** The server calls Qloo's REST API directly (`/v2/tags`, `/v2/insights`, `/search`) with the event-issued key, which stays in server environment variables and never reaches the browser. We didn't use the `@qloo/qloo-harness` CLI or MCP package, because the agent needed fine control over heatmaps, demographics and location signals. Results are cached for 30 minutes, at most 4 calls run at once and starts are paced under 8 a second, and 429 or 5xx responses get a short bounded retry.
+**Taste lift.** Qloo's raw heatmap mostly follows how busy an area is (r ≈ 0.95 in Austin), so on its own it just says "go downtown". I compare interest in your concept against general popularity across the city and rank areas by the gap. Then I keep only spots with real businesses around them, so no airports, parks or zoos. It's a scouting signal, not a guarantee.
 
-**Zone taste comes from the zone's own places.** Qloo silently ignores or barely weighs some parameters, so we tested ours. A location point alone hardly changed the answer: two Austin zones 15 km apart returned nearly identical artists. Signalling with the places actually in a zone does: fans of South Lamar's record and vintage shops lean to Rayland Baxter and Nikki Lane, while The Domain's crowd leans mainstream country and Louis the Child.
+**One spot's crowd.** Qloo quietly ignores or barely weighs some parameters, so I tested the ones I use. A location point on its own hardly changed the taste results: two Austin zones 15 km apart got almost the same artists. Using the places actually in a zone works much better. Fans of South Lamar's record and vintage shops lean toward Rayland Baxter and Nikki Lane, while The Domain mall's crowd leans mainstream country and Louis the Child.
 
-### Request to result: Italian date night in Austin
+**Calling Qloo.** The server talks to Qloo's REST API directly (`/v2/tags`, `/v2/insights`, `/search`), the way Qloo's developer guide shows. I skipped the `@qloo/qloo-harness` CLI because I wanted fine control over heatmaps, demographics and location. The key stays on the server. Results are cached for 30 minutes, at most 4 calls run at once and no more than 8 start per second, and 429 or 5xx errors get a short retry.
 
-What one search actually asks Qloo, step by step (key redacted, values from the bundled example):
+**Checking names.** An artist only gets the "✓ Qloo" mark if Qloo returned it as an artist, and a partner only if Qloo returned it as a brand. Anything else shows up as an "AI suggestion".
 
-1. **Match the concept to a place category.** `GET /v2/tags?filter.query=Italian restaurant` returns several tags. We keep only place-type tags and pick `urn:tag:category:place:italian_restaurant`, because it matches the head noun with no extra words.
-2. **Find the competitors.** `GET /v2/insights?filter.type=urn:entity:place&filter.tags=urn:tag:category:place:italian_restaurant&filter.location.query=Austin&take=50` returns the most popular matching places. Qloo resolves the city as "Austin, Travis County, Texas", and after dropping wrong-kind places and those outside the city cluster, 43 remain.
-3. **Map the taste.** `GET /v2/insights?filter.type=urn:heatmap&output.heatmap.boundary=urn:geohash&filter.location.query=Austin&signal.interests.entities=<top 3 competitors>` returns geohash cells with affinity and popularity. We fit affinity against popularity and rank areas by how far affinity beats the prediction (taste lift).
-4. **Name and vet each zone.** For each candidate zone, `GET /v2/insights?filter.type=urn:entity:place&filter.location=POINT(lon lat)&filter.location.radius=700` lists nearby places. Their Qloo categories decide whether the zone has a real commercial street, which nearby café or restaurant names it ("Radio Coffee & Beer"), and its neighborhood ("South Lamar"). Zones near airports are dropped.
-5. **Profile the audience.** `filter.type=urn:demographics` gives age and gender affinity. `urn:entity:artist`, `urn:entity:movie` and `urn:entity:brand` with `signal.location.query=Austin` give cross-domain taste. For a single zone, the agent signals with the places in that zone instead, which says who actually goes there.
-6. **Agent and playbook.** The agent sees a summary of steps 1 to 5, asks for more zone or audience taste if it needs it, flags surprising results, and submits a playbook. Each playlist name is checked against the artists Qloo returned, and each partner against the brands.
+**Speed.** You see each step as it happens. The map shows up after about 3 seconds and the plan after 12 to 15. The example buttons replay real recorded runs, so they load instantly.
 
-Result: South Lamar, taste lift +15, none of the top 43 competitors within 1 km, with a playlist and partners drawn from what Qloo says this crowd loves.
+### One search, step by step
 
-**Taste lift.** Qloo's raw heatmap tracks overall popularity closely (we measured r ≈ 0.95 in Austin), so a raw map mostly says "downtown is busy." Open Here fits affinity against popularity across the city and ranks areas by the residual: where people are more drawn to *this* concept than the area's general popularity predicts. It's a scouting signal, not a guarantee.
+What the Austin example actually asks Qloo (key left out, numbers from the example):
 
-**Grounding.** Playlist names are only marked "✓ Qloo" if Qloo returned them as artists, and partner names only if Qloo returned them as brands. Anything else is shown as "AI suggestion."
+1. **Turn the concept into a place category.** `GET /v2/tags?filter.query=Italian restaurant` returns a handful of tags. I only keep place categories and pick `urn:tag:category:place:italian_restaurant`, since it matches the main word with nothing extra.
+2. **Find the competitors.** `GET /v2/insights?filter.type=urn:entity:place&filter.tags=urn:tag:category:place:italian_restaurant&filter.location.query=Austin&take=50` returns the most popular matching places. Qloo reads the city as "Austin, Travis County, Texas". After dropping the wrong kinds of places and anything outside the city, 43 are left.
+3. **Map the demand.** `GET /v2/insights?filter.type=urn:heatmap&output.heatmap.boundary=urn:geohash&filter.location.query=Austin&signal.interests.entities=<top 3 competitors>` returns map cells with interest and popularity scores, which turn into taste lift.
+4. **Check each spot.** For each candidate, `GET /v2/insights?filter.type=urn:entity:place&filter.location=POINT(lon lat)&filter.location.radius=700` lists what's around it. Their categories decide whether there's a real street of businesses, which well-known place to name the spot after ("Radio Coffee & Beer"), and the neighborhood ("South Lamar"). Spots near airports are dropped.
+5. **Learn about the audience.** `filter.type=urn:demographics` gives the age and gender lean. Artists, films and brands with `signal.location.query=Austin` show what they're into. For one spot, the agent uses that spot's own places instead.
+6. **Write the plan.** The agent gets a summary of all this, asks for more detail if it wants it, flags anything that looks off, and submits the plan. Every artist and brand in it is checked against what Qloo returned.
 
-**Agent flow.** The agent streams its steps live. The map appears after about 3 seconds and the playbook after about 12. The first page load replays a recorded real run, so it's instant and free.
+The result: South Lamar, taste lift +15, none of the top 43 competitors within 1 km, and a playlist and partners based on what that crowd likes.
 
-## Honest limits
+## Limits
 
-- **Competitor counts are a sample.** Qloo returns the 50 most popular matching places, so smaller spots may not be counted.
-- **Coverage varies.** Big cities and common concepts work best. Niche concepts may return no data, and the app then suggests concepts that do have data in that city. Concepts are matched in English.
-- **Very dense cities** (like Manhattan) saturate Qloo's scores, leaving little lift. The app flags this as a weak signal.
-- **City names can resolve wide** ("New York" can mean the state). Open Here focuses on where competitors actually cluster.
-- **Airports** always look like hidden demand, so zones near airports are excluded.
+- **Competitor counts are a sample.** Qloo returns the 50 most popular matching places, so smaller spots may be missing.
+- **Coverage depends on the city and concept.** Big cities and common concepts work best. Concepts are matched in English, and if a search finds nothing, the app suggests concepts that do have data there.
+- **Very dense cities** like Manhattan can max out Qloo's scores, leaving little to rank. The app warns you when that happens.
+- **City names can be ambiguous.** "New York" can mean the state, so Open Here focuses on where the competitors actually are and shows which place Qloo matched.
 
 ## Run it locally
 
-Requires Node 22. No dependencies to install.
+You need Node 22. There's nothing to install.
 
 ```bash
 cp .env.example .env    # add QLOO_API_KEY, QLOO_BASE_URL and DEEPSEEK_API_KEY
@@ -85,26 +84,26 @@ npm test
 npm run dev             # http://127.0.0.1:3000
 ```
 
-The four example chips on the live site replay recorded agent runs. Those recordings are cached Qloo results, which Qloo asks participants to keep out of public repos, so they aren't committed. To create your own: `node --env-file=.env scripts/record-example.mjs austin-italian "Italian restaurant" Austin "cozy date-night spot for young couples"`, then `node --env-file=.env scripts/record-baseline.mjs austin-italian`.
+The example buttons on the live site replay recorded runs. Those recordings are cached Qloo results, and Qloo asks participants to keep those out of public repos, so they aren't in here. To make your own: `node --env-file=.env scripts/record-example.mjs austin-italian "Italian restaurant" Austin "cozy date-night spot for young couples"`, then `node --env-file=.env scripts/record-baseline.mjs austin-italian`.
 
 Optional settings: `LLM_BASE_URL`, `LLM_MODEL` (default `deepseek-flash`) and `LLM_DAILY_CAP_USD` (default 2). Any OpenAI-compatible Responses API works.
 
 ## Project layout
 
-| Path | What |
+| Path | What's in it |
 |---|---|
-| `lib/analyze.mjs` | Market pipeline: concept resolution, competitors, taste-lift zones, audience |
-| `lib/lift.mjs` | Taste-lift math |
-| `lib/agent.mjs` | The agent: tools, validation, grounding |
+| `lib/analyze.mjs` | Market analysis: concept matching, competitors, taste-lift spots, audience |
+| `lib/lift.mjs` | The taste-lift math |
+| `lib/agent.mjs` | The agent: tools, checks, name verification |
 | `lib/baseline.mjs` | The "without Qloo" comparison |
-| `lib/llm.mjs` | LLM client with a daily spend guard |
-| `api/` | Vercel functions: `analyze`, `agent` (streaming NDJSON), `baseline` |
-| `public/` | The web app (vanilla JS, Leaflet) |
-| `scripts/` | Live smoke tests, coverage check, example recording |
+| `lib/llm.mjs` | LLM client with a daily spending cap |
+| `api/` | Vercel functions: `analyze`, `agent` (streams its steps) and `baseline` |
+| `public/` | The web app (plain JavaScript and Leaflet) |
+| `scripts/` | Live test runs, a coverage check and example recording |
 
 ## Safety
 
-API keys live only in server environment variables. Every endpoint is rate limited per IP. The agent has a request deadline under the hosting limit, stops when the visitor leaves, and reserves budget before each model call. City and concept for Qloo calls always come from the user, never from the model.
+API keys only live in server environment variables. Every endpoint is rate limited per visitor. The agent has a deadline that fits the hosting limit, stops when you leave the page, and sets aside budget before each model call. The city and concept sent to Qloo always come from you, not from the model.
 
 ## Attribution
 

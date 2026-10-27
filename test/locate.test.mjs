@@ -27,6 +27,12 @@ test('locateAndMeasure scores the plain AI spot like our zones', async () => {
   assert.equal(r.agreesWithZone, 2);
 });
 
+test('locateAndMeasure rejects a differently named place, then tries the alternative', async () => {
+  const qloo = { search: async q => (q.startsWith('Little Osaka') ? [{ name: 'Little Tokyo', location: { lat: 40.694, lon: -73.919 } }] : [{ name: 'Sawtelle', location: { lat: 40.695, lon: -73.92 } }]) };
+  const r = await locateAndMeasure('Little Osaka (Sawtelle), West LA', market, qloo);
+  assert.equal(r.name, 'Sawtelle');
+});
+
 test('locateAndMeasure refuses a match outside the city', async () => {
   const qloo = { search: async () => [{ name: 'Saint-Denis', location: { lat: 48.93, lon: 2.36 } }] };
   const r = await locateAndMeasure('Canal Saint-Martin', market, qloo);

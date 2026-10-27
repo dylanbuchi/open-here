@@ -460,14 +460,19 @@
     if (!loc) return '';
     return loc.found ? ' Plain AI picked ' + loc.name + ', ' + liftTxt(loc.liftPoints).toLowerCase() + ' points.' : ' The plain AI pick could not be placed on the map.';
   }
-  function locationRow(loc) {
+  function locationRow(loc, zoneScores) {
     if (!loc || !loc.name) return '';
     const city = (curMarket && curMarket.city) || (last && last.city) || 'the city';
     if (!loc.found) return '<p class="loc-miss">We couldn\'t place \'' + esc(loc.name) + '\' inside ' + esc(city) + ' on the map, so it can\'t be measured.</p>';
     const topN = curMarket && (curMarket.competitors || []).length;
     const comp = (n, of) => typeof n === 'number' ? ' \u00b7 ' + n + ' of ' + (of || 'the top') + (of ? '' : '') + ' ' + (of ? 'top competitors' : 'competitors') + ' within 1 km' : '';
     const z = ourZone();
-    const ours = z ? '<b>' + esc(placeName(z)) + '</b><span class="loc-m">' + esc(liftTxt(+(z.lift * 100))) + comp(z.competitorsWithin1km, topN) + '</span>' : '<b>n/a</b>';
+    // Use the server's point-based score when present, so both sides are
+    // measured the same way (average within 1 km of the spot).
+    const same = z && Array.isArray(zoneScores) ? zoneScores.find((s) => s.rank === z.rank) : null;
+    const ourLift = same && nOk(same.liftPoints) ? same.liftPoints : z ? +(z.lift * 100) : null;
+    const ourComp = same ? same.competitorsWithin1km : z && z.competitorsWithin1km;
+    const ours = z ? '<b>' + esc(placeName(z)) + '</b><span class="loc-m">' + esc(liftTxt(ourLift)) + comp(ourComp, topN) + '</span>' : '<b>n/a</b>';
     const agree = nOk(loc.agreesWithZone) ? '<p class="loc-note">Plain AI\'s pick sits next to our #' + esc(loc.agreesWithZone) + ' spot.</p>' : '';
     return '<div class="loc-row"><div class="loc-side plain"><small>Plain AI\'s pick</small><b>' + esc(loc.name) + '</b><span class="loc-m">' + esc(liftTxt(loc.liftPoints)) + comp(loc.competitorsWithin1km, loc.competitorSample) + '</span></div>' +
       '<div class="loc-side qloo"><small>Open Here\'s best zone</small>' + ours + '</div></div>' + agree;
@@ -492,7 +497,7 @@
     p = p || {};
     const pl = p.playlist || [], pp = p.partners || [];
     const bz = p.bestZone;
-    const locRow = locationRow(b.location);
+    const locRow = locationRow(b.location, b.zoneScores);
     const sect = (t, body) => body ? '<h5 class="pb-sub">' + t + '</h5>' + body : '';
     const chips = (html) => html ? '<ul class="pchips">' + html + '</ul>' : '';
     const html = '<section class="cmp" aria-labelledby="cmp-h">' +

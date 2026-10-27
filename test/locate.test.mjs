@@ -1,6 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanNeighborhood, locateAndMeasure } from '../lib/baseline.mjs';
+import { cleanNeighborhood, locateAndMeasure, scoreZonesLikeAPoint } from '../lib/baseline.mjs';
+
+test('our spots are scored exactly like the plain AI pick: average lift within 1 km', () => {
+  const m = {
+    zones: [{ rank: 1, lat: 40.6943, lon: -73.9187 }],
+    scored: [{ lat: 40.694, lon: -73.919, lift: 0.08 }, { lat: 40.695, lon: -73.92, lift: 0.1 }, { lat: 40.6, lon: -73.9, lift: 0.5 }],
+    competitors: [{ lat: 40.696, lon: -73.918 }, { lat: 40.5, lon: -73.9 }],
+  };
+  assert.deepEqual(scoreZonesLikeAPoint(m), [{ rank: 1, liftPoints: 9, competitorsWithin1km: 1 }]);
+});
 import { refineZones, tidyPlace } from '../lib/analyze.mjs';
 
 const market = {

@@ -1,17 +1,8 @@
 // GET /api/analyze?concept=...&city=...
 import { analyze } from '../lib/analyze.mjs';
+import { createThrottle, clientIp } from '../lib/throttle.mjs';
 
-// Best-effort per-instance throttle to protect the Qloo key from abuse.
-const hits = new Map();
-const WINDOW_MS = 60_000, MAX_PER_WINDOW = 12;
-
-function limited(ip) {
-  const now = Date.now();
-  const recent = (hits.get(ip) || []).filter(t => now - t < WINDOW_MS);
-  recent.push(now);
-  hits.set(ip, recent);
-  return recent.length > MAX_PER_WINDOW;
-}
+const limited = createThrottle({ max: 12 });
 
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
@@ -19,8 +10,7 @@ export default async function handler(req, res) {
     res.statusCode = 405;
     return res.end(JSON.stringify({ error: 'Use GET' }));
   }
-  const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
-  if (limited(ip)) {
+  if (limited(clientIp(req))) {
     res.statusCode = 429;
     return res.end(JSON.stringify({ error: 'Too many searches. Wait a minute and try again.' }));
   }

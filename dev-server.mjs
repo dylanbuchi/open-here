@@ -3,11 +3,12 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import analyzeHandler from './api/analyze.mjs';
+import agentHandler from './api/agent.mjs';
 
 const PORT = Number(process.env.PORT) || 3000;
 const ROOT = join(import.meta.dirname, 'public');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' };
-const routes = { '/api/analyze': analyzeHandler };
+const routes = { '/api/analyze': analyzeHandler, '/api/agent': agentHandler };
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
